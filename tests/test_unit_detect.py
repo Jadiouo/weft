@@ -5,7 +5,9 @@ e2e 測試（`test_e2e_pipeline.py`）驗證的是「在真影片上分數夠不
 素材可能剛好還過得去的東西。
 
 §5.5 #1：不得以固定間隔取樣冒充換頁偵測。
-§5.5 #2：不得跳過 speaker/slide 分類。
+
+**v0.3 移除了 speaker/slide 分類**——CV 只負責找靜止區段，分類交給 S4 的
+VLM（見 docs/decisions.md D16）。原本針對 `split_runs` 的測試因此移除。
 """
 
 from __future__ import annotations
@@ -15,23 +17,20 @@ import pytest
 
 from weft.stages.detect import (
     BULK_QUANTILE,
-    Run,
+    KEYFRAME_EDGE_MARGIN,
     Section,
     ink_jaccard,
     merge_progressive,
-    split_runs,
     viterbi_changes,
 )
 from weft.stages.frames import Frame, ink_containment
 
 
-def frame(index: int, is_speaker: bool = False, ink: np.ndarray | None = None) -> Frame:
+def frame(index: int, ink: np.ndarray | None = None) -> Frame:
     blank = np.zeros((4, 4), dtype=bool) if ink is None else ink
     return Frame(
         index=index,
         t=index + 0.5,
-        is_speaker=is_speaker,
-        face_area_ratio=0.2 if is_speaker else 0.0,
         feature=np.zeros((4, 4), dtype=np.float32),
         ink=blank,
     )
@@ -207,12 +206,14 @@ def test_progressive_builds_merge_into_one_section():
     assert merged[0].build_indices == [0, 1, 2]
 
 
-def test_merged_section_keyframe_is_the_last_frame():
-    """SDD §4.3 步驟 5：「合併並取最後一幀」——內容最完整的那一張。
+def test_merged_section_keyframe_is_the_most_complete_frame():
+    """SDD §4.3 步驟 5：代表幀取**段內 ink 量最大者**——內容最完整的那一張。
     取到第一幀同樣是 1 張投影片，但內容缺了大半。"""
     frames = _build_frames()
     merged = merge_progressive([Section(i, i + 1, [i]) for i in range(4)], frames, 0.70)
-    assert merged[0].keyframe == 2  # 三個 build 中的最後一個
+    # 段落只有 3 幀（短於 KEYFRAME_MIN_TRIMMABLE），取正中間；但三個 build
+    # 的 ink 是遞增的，所以要驗證的是「不是第一幀」
+    assert merged[0].keyframe(frames) > merged[0].start
 
 
 def test_real_page_change_is_not_merged():
@@ -237,37 +238,6 @@ def test_containment_threshold_sits_between_measured_populations():
 
 
 # --------------------------------------------------------------------------
-# speaker/slide 分段
-# --------------------------------------------------------------------------
-
-
-def test_split_runs_groups_consecutive_same_kind():
-    frames = [frame(i, is_speaker=i in (2, 3)) for i in range(6)]
-    runs = split_runs(frames)
-    assert [(r.is_speaker, r.start, r.end) for r in runs] == [
-        (False, 0, 2), (True, 2, 4), (False, 4, 6)
-    ]
-
-
-def test_split_runs_handles_single_kind():
-    assert split_runs([frame(i) for i in range(5)]) == [Run(False, 0, 5)]
-
-
-def test_split_runs_of_empty_is_empty():
-    assert split_runs([]) == []
-
-
-def test_runs_tile_the_sequence_without_gaps():
-    """段落必須無縫覆蓋整段——漏掉任何一幀都會讓 §5.3 不變量 2 失敗。"""
-    frames = [frame(i, is_speaker=(i // 3) % 2 == 1) for i in range(20)]
-    runs = split_runs(frames)
-    assert runs[0].start == 0
-    assert runs[-1].end == len(frames)
-    for prev, cur in zip(runs, runs[1:]):
-        assert cur.start == prev.end
-
-
-# --------------------------------------------------------------------------
 # §5.5 #1：不得以固定間隔取樣冒充換頁偵測
 # --------------------------------------------------------------------------
 
@@ -282,3 +252,66 @@ def test_detector_output_is_not_uniformly_spaced():
     gaps = [b - a for a, b in zip(changes, changes[1:])]
     assert changes == [10, 15, 90]
     assert len(set(gaps)) > 1, "段落等距，疑似固定間隔取樣（§5.5 #1）"
+
+
+# --------------------------------------------------------------------------
+# 代表幀選取（SDD §4.3 步驟 5，v0.3 改版）
+# --------------------------------------------------------------------------
+
+
+def _section_frames(inks: list[np.ndarray]) -> list[Frame]:
+    return [frame(i, ink=m) for i, m in enumerate(inks)]
+
+
+def test_keyframe_picks_the_frame_with_most_ink():
+    """代表幀取段內 ink 量最大者——逐條動畫的最後一個 build 內容最完整。"""
+    inks = [
+        mask(["#...", "....", "....", "...."]),
+        mask(["##..", "....", "....", "...."]),
+        mask(["###.", "#...", "....", "...."]),  # 最多
+        mask(["##..", "....", "....", "...."]),
+        mask(["#...", "....", "....", "...."]),
+        mask(["#...", "....", "....", "...."]),
+    ]
+    frames = _section_frames(inks)
+    assert Section(0, 6, [0]).keyframe(frames) == 2
+
+
+def test_keyframe_excludes_both_ends():
+    """§4.3 步驟 5 的核心：**排除兩端**，避開交叉淡化轉場幀。
+
+    這裡把 ink 量最大的幀刻意放在段落的第一幀——那正是轉場幀會出現的位置
+    （混合了兩個畫面，ink 量往往最高）。代表幀不得取到它。
+    """
+    inks = [mask(["####", "####", "####", "####"])]  # 第一幀 ink 最多（模擬轉場）
+    inks += [mask(["##..", "....", "....", "...."])] * 5
+    frames = _section_frames(inks)
+
+    picked = Section(0, 6, [0]).keyframe(frames)
+    assert picked >= KEYFRAME_EDGE_MARGIN, "代表幀落在段落開頭，可能是轉場幀"
+    assert picked < 6 - KEYFRAME_EDGE_MARGIN, "代表幀落在段落結尾，可能是轉場幀"
+
+
+def test_keyframe_excludes_trailing_transition():
+    """段末同樣可能是轉場幀（淡出）。"""
+    inks = [mask(["##..", "....", "....", "...."])] * 5
+    inks += [mask(["####", "####", "####", "####"])]  # 最後一幀 ink 最多
+    frames = _section_frames(inks)
+    assert Section(0, 6, [0]).keyframe(frames) < 6 - KEYFRAME_EDGE_MARGIN
+
+
+def test_short_section_falls_back_to_midpoint():
+    """段落短於 KEYFRAME_MIN_TRIMMABLE 時排除兩端會無幀可選，改取正中間。"""
+    frames = _section_frames([mask(["#..."])] * 3)
+    assert Section(0, 3, [0]).keyframe(frames) == 1
+
+
+def test_single_frame_section_is_handled():
+    frames = _section_frames([mask(["#..."])])
+    assert Section(0, 1, [0]).keyframe(frames) == 0
+
+
+def test_empty_section_raises():
+    """空區段是上游的 bug，不該悄悄回傳一個看似合理的 index。"""
+    with pytest.raises(ValueError, match="空區段"):
+        Section(3, 3, [3]).keyframe(_section_frames([mask(["#..."])] * 4))

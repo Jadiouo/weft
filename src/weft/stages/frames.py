@@ -1,8 +1,14 @@
-"""抽幀、speaker/slide 分類、幀間距離。SDD §4.3 步驟 1–3。
+"""抽幀與幀特徵。SDD §4.3 步驟 1–3。
 
-這些是 S1b 的前置：把影片變成一串「已分類、已降噪」的特徵向量，換頁偵測
-（detect.py）只在這串向量上工作，不再碰影像。分開的理由是換頁偵測的
-參數要能快速反覆實驗，而抽幀很慢。
+這些是 S1b 的前置：把影片變成一串「已降噪」的特徵向量，靜止區段偵測
+（detect.py）只在這串向量上工作，不再碰影像。分開的理由是偵測的參數
+要能快速反覆實驗，而抽幀很慢。
+
+**v0.3 移除了 speaker/slide 二分類。** 原本靠偵測滿版人臉，實測在真實素材
+上失效（人臉面積佔比 0.005–0.026 vs 門檻 0.04；而投影片中的人像會被誤測成
+0.024，與講者畫面完全重疊）。現在 CV 只負責「找出畫面靜止的區段」，
+「這張圖是不是投影片」交給 S4 的 VLM 判斷——它本來就要看這張圖。
+見 docs/decisions.md D16。
 """
 
 from __future__ import annotations
@@ -17,21 +23,15 @@ import numpy as np
 
 log = logging.getLogger(__name__)
 
-#: SDD §4.3 步驟 2 用的偵測器。alt2 在合成素材上實測優於 default
-#: （見 docs/decisions.md D6），且對非正面臉較寬容。
-CASCADE = "haarcascade_frontalface_alt2.xml"
-
 
 @dataclass(frozen=True)
 class Frame:
-    """一個抽樣點。`feature` 是降解析度＋模糊後的灰階圖，攤平為 float32。"""
+    """一個抽樣點。`feature` 是降解析度＋模糊後的灰階圖。"""
 
     index: int
     t: float
-    is_speaker: bool
-    face_area_ratio: float
     feature: np.ndarray
-    #: 前景遮罩（非背景像素），供逐條動畫的視覺包含判斷用
+    #: 前景遮罩（非背景像素）。靜止區段偵測與逐條動畫合併都用它。
     ink: np.ndarray
     path: Path | None = None
 
@@ -98,43 +98,17 @@ def _ink_mask(gray: np.ndarray) -> np.ndarray:
     return deviation > (level / 255.0 * peak)
 
 
-def detect_face_ratio(img: np.ndarray, cascade: cv2.CascadeClassifier) -> float:
-    """畫面中最大人臉的面積佔比。無臉則為 0。
-
-    SDD §4.3 步驟 2：本素材為硬切、無 PiP，偵測滿版人臉即足以二分類。
-    """
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    h, w = gray.shape[:2]
-    faces = cascade.detectMultiScale(gray, 1.05, 4, minSize=(max(24, h // 12),) * 2)
-    if len(faces) == 0:
-        return 0.0
-    return max(fw * fh for _, _, fw, fh in faces) / (w * h)
-
-
-def load_frames(
-    paths: list[Path],
-    fps: float,
-    short_side: int,
-    sigma: float,
-    face_min_area_ratio: float,
-) -> list[Frame]:
-    cascade = cv2.CascadeClassifier(cv2.data.haarcascades + CASCADE)
-    if cascade.empty():
-        raise RuntimeError(f"載入不到 {CASCADE}——OpenCV 版本可能已移除 CascadeClassifier")
-
+def load_frames(paths: list[Path], fps: float, short_side: int, sigma: float) -> list[Frame]:
     frames: list[Frame] = []
     for i, path in enumerate(paths):
         img = cv2.imread(str(path))
         if img is None:
             raise RuntimeError(f"讀不到抽出的幀：{path}")
-        ratio = detect_face_ratio(img, cascade)
         gray = _downscale_and_blur(img, short_side, sigma)
         frames.append(
             Frame(
                 index=i,
                 t=(i + 0.5) / fps,  # 每格中心
-                is_speaker=ratio >= face_min_area_ratio,
-                face_area_ratio=ratio,
                 feature=gray,
                 ink=_ink_mask(gray),
                 path=path,

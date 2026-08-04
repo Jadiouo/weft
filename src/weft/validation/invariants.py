@@ -126,6 +126,25 @@ def rule_04_slide_refs_exist(ir: VideoIR) -> list[Violation]:
             out.append(
                 Violation(4, "slide_ref 可解析", f"{seg.segment_id} 的 mode 為 slide 但 slide_ref 為 null")
             )
+        # v0.3：candidate_ref 是 S1b 取出的候選幀，與 VLM 的判定無關。
+        # 它若指向不存在的 slide，代表 S1b/S3 的產物對不上。
+        if seg.candidate_ref is not None and seg.candidate_ref not in known:
+            out.append(
+                Violation(4, "slide_ref 可解析",
+                          f"{seg.segment_id} 的 candidate_ref 指向不存在的 slide "
+                          f"{seg.candidate_ref!r}")
+            )
+        # VLM 判定不是投影片時，slide_ref 必須已清空——留著會讓下游以為
+        # 該段有投影片來源，chunk 的 provenance 就錯了
+        if (
+            seg.understanding is not None
+            and not seg.understanding.is_slide
+            and seg.slide_ref is not None
+        ):
+            out.append(
+                Violation(4, "slide_ref 可解析",
+                          f"{seg.segment_id} 被判定不是投影片，但 slide_ref 未清空")
+            )
     for seg in ir.segments:
         if seg.understanding is None:
             continue

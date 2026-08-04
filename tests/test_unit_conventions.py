@@ -278,8 +278,7 @@ def test_ir_models_forbid_extra_fields():
 @pytest.mark.parametrize(
     "stage_module,names",
     [
-        ("weft.stages.local", ["s0_fetch", "s1a_transcript", "s1b_slides",
-                               "s2_ocr", "s2b_lexicon", "s2c_correct", "s3_align"]),
+        ("weft.stages.local", ["s0_fetch", "s1a_transcript", "s1b_slides", "s3_align"]),
         ("weft.stages.cloud", ["s4_understand", "s5_synthesize", "s6_render"]),
     ],
 )

@@ -42,14 +42,18 @@ def test_s0_is_the_only_root():
     assert roots == [Stage.S0_FETCH]
 
 
-def test_s2c_depends_on_both_transcript_and_lexicon():
-    """§2.2：術語校正需要 S1a 的逐字稿與 S2b 的詞庫兩者。"""
-    assert set(DEPENDENCIES[Stage.S2C_CORRECT]) == {Stage.S1A_TRANSCRIPT, Stage.S2B_LEXICON}
+def test_s3_depends_on_both_transcript_and_candidates():
+    """§4.6：對齊需要逐字稿與候選區段兩者。"""
+    assert set(DEPENDENCIES[Stage.S3_ALIGN]) == {Stage.S1A_TRANSCRIPT, Stage.S1B_SLIDES}
 
 
-def test_s3_depends_on_corrected_transcript_not_raw():
-    """§4.6 的輸入是校正後的逐字稿——若接在 S1a 上，術語校正就白做了。"""
-    assert Stage.S2C_CORRECT in DEPENDENCIES[Stage.S3_ALIGN]
+def test_local_ocr_chain_is_gone():
+    """v0.3 移除了 S2／S2b／S2c（本地 OCR + 詞庫 + 術語校正）。
+
+    這條測試釘住「不要為了備用把它加回來」——留著就會有人去修它。
+    術語校正改由 S4 在同一次呼叫中完成（VLM 同時看到投影片圖與逐字稿）。
+    """
+    assert {s.value for s in Stage} == {"S0", "S1a", "S1b", "S3", "S4", "S5", "S6"}
 
 
 def test_prepare_and_understand_partition_all_stages():
@@ -74,9 +78,9 @@ def test_downstream_is_transitive():
     assert Stage.S6_RENDER in downstream_of(Stage.S1B_SLIDES)
 
 
-def test_downstream_of_s2b_reaches_correction_and_beyond():
-    ds = downstream_of(Stage.S2B_LEXICON)
-    assert {Stage.S2C_CORRECT, Stage.S3_ALIGN, Stage.S4_UNDERSTAND} <= ds
+def test_downstream_of_s1b_reaches_alignment_and_beyond():
+    ds = downstream_of(Stage.S1B_SLIDES)
+    assert {Stage.S3_ALIGN, Stage.S4_UNDERSTAND, Stage.S6_RENDER} <= ds
 
 
 def test_downstream_of_last_stage_is_empty():
@@ -114,11 +118,10 @@ def test_each_stage_config_has_its_own_hash():
     cfg = Config()
     hashes = {
         cfg.s0.params_hash(), cfg.s1a.params_hash(), cfg.s1b.params_hash(),
-        cfg.s2.params_hash(), cfg.s2b.params_hash(), cfg.s2c.params_hash(),
         cfg.s3.params_hash(), cfg.s4.params_hash(), cfg.s5.params_hash(),
         cfg.s6.params_hash(),
     }
-    assert len(hashes) == 10, "不同階段的設定產生了相同的 hash"
+    assert len(hashes) == 7, "不同階段的設定產生了相同的 hash"
 
 
 def test_changing_one_stage_config_does_not_affect_others():
@@ -162,16 +165,16 @@ def test_invalidate_downstream_leaves_upstream_untouched():
     for stage in Stage:
         state.mark_done(stage, "h")
 
-    state.invalidate_downstream(Stage.S2B_LEXICON)
+    state.invalidate_downstream(Stage.S1B_SLIDES)
 
     # 上游仍完成
     assert state.is_satisfied(Stage.S0_FETCH, "h")
-    assert state.is_satisfied(Stage.S1B_SLIDES, "h")
-    assert state.is_satisfied(Stage.S2_OCR, "h")
+    # 平行分支不受影響
+    assert state.is_satisfied(Stage.S1A_TRANSCRIPT, "h")
     # 自己也不動——變的是它的參數，重跑由呼叫端決定
-    assert state.is_satisfied(Stage.S2B_LEXICON, "h")
+    assert state.is_satisfied(Stage.S1B_SLIDES, "h")
     # 下游全部作廢
-    for stage in (Stage.S2C_CORRECT, Stage.S3_ALIGN, Stage.S4_UNDERSTAND,
+    for stage in (Stage.S3_ALIGN, Stage.S4_UNDERSTAND,
                   Stage.S5_SYNTHESIZE, Stage.S6_RENDER):
         assert not state.is_satisfied(stage, "h"), f"{stage} 未被作廢"
 
@@ -276,7 +279,7 @@ def test_sync_state_is_idempotent(tmp_path):
     for stage in Stage:
         state.mark_done(stage, stage_params(cfg, stage))
 
-    cfg.s2c.similarity_threshold = 0.5
+    cfg.s1b.fps = 2.0
     first = sync_state(cfg, state)
     second = sync_state(cfg, state)
 

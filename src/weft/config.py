@@ -41,9 +41,6 @@ class S1aConfig(StageConfig):
     language: str = "zh"
     beam_size: int = 5
     vad_filter: bool = True
-    #: 把系列術語詞庫餵進 initial_prompt（§9 文言文 ASR 的緩解）
-    use_lexicon_prompt: bool = True
-    lexicon_prompt_max_terms: int = 40
 
 
 class S1bConfig(StageConfig):
@@ -53,9 +50,6 @@ class S1bConfig(StageConfig):
     #: 降解析度短邊，壓制雷射筆與壓縮雜訊（§4.3 步驟 3）
     downscale_short_side: int = 180
     blur_sigma: float = 2.0
-    #: speaker/slide 二分類
-    face_detector: str = "yunet"
-    face_min_area_ratio: float = 0.04  # 滿版人臉的下限面積佔比
     #: HMM 換頁偵測（§4.3 步驟 4）——以「投影片會停留一段時間」為先驗。
     #: 0.97 對應幾何分布平均停留 ~33 幀，在 1fps 下即 ~33 秒，與 §5.1 的
     #: 「每頁停留 30–120 秒」相符。
@@ -71,44 +65,15 @@ class S1bConfig(StageConfig):
     progressive_containment_ratio: float = 0.70
 
 
-class S2Config(StageConfig):
-    """OCR。SDD §4.4。"""
-
-    ocr_model: str = "PaddleOCR-VL"
-    lang: str = "ch"
-    use_gpu: bool = False
-    #: PaddleOCR 的 `ch` 模型輸出簡體，但本專案素材是繁體。不轉的話詞庫會
-    #: 混入簡體詞條，而 §4.5 是拿詞庫比對繁體逐字稿——永遠匹配不到。
-    normalise_to_traditional: bool = True
-
-
-class S2bConfig(StageConfig):
-    """術語詞庫萃取。SDD §4.4。"""
-
-    term_min_len: int = 2
-    term_max_len: int = 6
-    min_count: int = 1
-    #: 書名號、括號內文字視為術語候選
-    bracket_extraction: bool = True
-
-
-class S2cConfig(StageConfig):
-    """逐字稿術語校正。SDD §4.5。"""
-
-    similarity_threshold: float = 0.85
-    #: 只在時間上鄰近的投影片詞庫中比對（±N 個候選段）
-    neighbor_window: int = 2
-    pinyin_weight: float = 0.7
-    shape_weight: float = 0.3
-
-
 class S3Config(StageConfig):
-    """對齊。SDD §4.6。"""
+    """對齊。SDD §4.6。
 
-    embedding_model: str = "BAAI/bge-m3"
-    device: str = "cuda"
-    #: 吸附範圍硬限制（§4.6 關鍵約束）。放大此值等同繞過設計約束。
-    snap_window_sec: float = 20.0
+    **v0.3 移除了語意邊界吸附。** 吸附需要投影片文字來判斷「這句話比較像
+    前一張還是後一張」，而 v0.3 拿掉了本地 OCR——投影片文字要到 S4 才有，
+    S3 拿不到。§4.6 明文禁止 S3 呼叫 LLM（避免與 S4 循環依賴），所以吸附
+    無法在此進行。S3 現在只做粗切。見 known-risks R10。
+    """
+
     min_segment_sec: float = 5.0
 
 
@@ -186,9 +151,6 @@ class Config(BaseModel):
     s0: S0Config = Field(default_factory=S0Config)
     s1a: S1aConfig = Field(default_factory=S1aConfig)
     s1b: S1bConfig = Field(default_factory=S1bConfig)
-    s2: S2Config = Field(default_factory=S2Config)
-    s2b: S2bConfig = Field(default_factory=S2bConfig)
-    s2c: S2cConfig = Field(default_factory=S2cConfig)
     s3: S3Config = Field(default_factory=S3Config)
     s4: S4Config = Field(default_factory=S4Config)
     s5: S5Config = Field(default_factory=S5Config)

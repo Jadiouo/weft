@@ -206,7 +206,7 @@ def _make_ir(blocks: list[tuple[str, str]]):
     from tests.factories import make_ir
 
     ir = make_ir(Path(mkdtemp()))
-    ir.slides[0].ocr_text = SLIDE
+    ir.slides[0].slide_text = SLIDE
     seg = ir.segments[1]
     seg.transcript_corrected = TRANSCRIPT
     seg.understanding.content_blocks = [

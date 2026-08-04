@@ -120,15 +120,3 @@ def whisper_transcribe(video: Path, cfg, initial_prompt: str | None) -> list[tup
             except ImportError:
                 pass
     raise RuntimeError(f"Whisper 轉錄失敗：{last}")
-
-
-def lexicon_prompt(lexicon, max_terms: int) -> str | None:
-    """把系列術語詞庫塞進 initial_prompt。SDD §9 對文言文 ASR 的緩解。
-
-    取出現次數最高的前 N 個——prompt 太長反而會讓 Whisper 分心，且
-    低頻術語本來就不太會出現在這一支影片。
-    """
-    if lexicon is None or not lexicon.entries:
-        return None
-    terms = sorted(lexicon.entries, key=lambda e: -e.count)[:max_terms]
-    return "以下為本系列講經常用術語：" + "、".join(e.term for e in terms) + "。"

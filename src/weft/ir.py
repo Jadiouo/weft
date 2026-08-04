@@ -101,14 +101,31 @@ class VideoMeta(Strict):
 # --------------------------------------------------------------------------
 
 
+class CorrectionMethod(StrEnum):
+    """術語校正的來源。
+
+    v0.3 移除了本地 OCR + 詞庫鏈（原 `lexicon`），改由 S4 的 VLM 在
+    同一次呼叫中對照投影片畫面修正逐字稿。
+    """
+
+    VLM = "vlm"
+
+
 class Correction(Strict):
-    """SDD §3.3 corrections[]。每次替換都必須留下這筆紀錄。"""
+    """SDD §3.3 corrections[]。每次替換都必須留下這筆紀錄。
+
+    `reason` 是 VLM 給的理由，供人工稽核——沒有它就只剩「模型說要改」，
+    §5.6 的抽檢無從判斷改得對不對。
+    """
 
     from_text: str = Field(alias="from")
     to_text: str = Field(alias="to")
-    source: str  # slide_id
-    method: Literal["lexicon"]
-    score: Score
+    source: str  # slide_id（對照投影片改的）或 segment_id
+    method: CorrectionMethod = CorrectionMethod.VLM
+    reason: str = ""
+    #: VLM 不給數值分數，故為選填。保留欄位是為了讓未來可能的
+    #: 二次驗證（例如拼音相似度複核）有地方寫。
+    score: Score | None = None
 
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
@@ -155,11 +172,15 @@ class Transcript(Strict):
 
 
 class FrameLabel(Strict):
-    """單一抽出幀的分類結果。02_candidates.json 的原料。"""
+    """單一抽出幀。02_candidates.json 的原料。
+
+    v0.3 移除了 speaker/slide 二分類——CV 只負責找靜止區段，分類交給 VLM。
+    `frame_class` 保留為 `slide`（意為「候選幀」），欄位留著是為了讓
+    02_candidates.json 的既有讀取端不必改。
+    """
 
     t: Seconds
-    frame_class: FrameClass
-    face_score: Score | None = None
+    frame_class: FrameClass = FrameClass.SLIDE
     frame_path: str | None = None
 
 
@@ -191,7 +212,11 @@ class CandidateSet(Strict):
 
 
 class Slide(Strict):
-    """SDD §3.2。"""
+    """一個靜止區段的代表幀。SDD §3.2。
+
+    v0.3 起這是**候選幀**——S1b 只負責找出畫面靜止的區段並取代表幀，
+    「這張圖是不是投影片」由 S4 的 VLM 判定（`Understanding.is_slide`）。
+    """
 
     slide_id: str
     image_path: str
@@ -199,29 +224,11 @@ class Slide(Strict):
     t_last_seen: Seconds
     is_progressive_final: bool = False
     build_frames: list[Seconds] = Field(default_factory=list)
-    ocr_text: str | None = None
-    ocr_confidence: Score | None = None
+    #: 投影片上的文字，由 **S4 的 VLM** 讀出（v0.3 之前是本地 OCR）。
+    #: 這同時是 §5.4 溯源檢查對 slide_ocr 型 block 的比對來源——
+    #: 因此 prompt 必須要求 VLM **先逐字轉錄、再詮釋**，見 known-risks R9。
+    slide_text: str | None = None
     layout_description: str | None = None  # 由 S4 填入
-
-
-# --------------------------------------------------------------------------
-# S2b — 術語詞庫（scope 為系列級，SDD §4.4）
-# --------------------------------------------------------------------------
-
-
-class LexiconEntry(Strict):
-    term: str
-    pinyin: str | None = None
-    count: int = Field(default=1, ge=1)
-    first_seen: dict[str, list[str]] = Field(default_factory=dict)  # video_id -> [slide_id]
-
-
-class Lexicon(Strict):
-    """04_lexicon.json。可跨影片累積。"""
-
-    series_id: str | None = None
-    entries: list[LexiconEntry] = Field(default_factory=list)
-    ocr_model: str | None = None
 
 
 # --------------------------------------------------------------------------
@@ -237,6 +244,11 @@ class Segment(Strict):
     t_start: Seconds
     t_end: Seconds
     mode: SegmentMode
+    #: S1b 取出的候選幀。**一定會設**（只要該時段有候選），與 VLM 的判定無關。
+    #: 保留它是為了讓 debug markdown 能顯示「VLM 判定不是投影片的那張圖」，
+    #: 否則被拒絕的候選就消失了，§5.6 的人工抽檢無從複核。
+    candidate_ref: str | None = None
+    #: 僅在 S4 判定 `is_slide=true` 後才設。
     slide_ref: str | None = None
     cue_indices: list[int] = Field(default_factory=list)  # §5.3 #3 的驗證依據
     transcript_raw: str = ""
@@ -270,6 +282,14 @@ class ContentBlock(Strict):
 class Understanding(Strict):
     """07_understanding/seg_NNN.json。SDD §3.4。"""
 
+    #: **VLM 的分類判定**（v0.3）：這個候選幀是不是投影片？
+    #: false → 該 segment 降級為 speaker_only，slide_ref 清空。
+    is_slide: bool = True
+    reject_reason: str | None = None  # is_slide=false 時的理由，供稽核
+    #: VLM 對照投影片畫面讀出的文字。§5.4 對 slide_ocr 型 block 的比對來源。
+    slide_text: str | None = None
+    #: 對照投影片修正的逐字稿錯字。每筆都帶理由，供 §5.6 抽檢。
+    corrections: list[Correction] = Field(default_factory=list)
     summary: str
     layout_description: str | None = None
     content_blocks: list[ContentBlock] = Field(default_factory=list)

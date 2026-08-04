@@ -4,23 +4,16 @@
 segment、吸附不得超出 ±20 秒。這些一旦錯了，§5.3 的不變量 1/2/3 會全部
 連鎖失敗，而且很難從最終產物反推是哪裡出的問題。
 
-語意吸附的**品質**（誤差中位數 ≤ 5 秒）需要真實影片黃金集，見
-`test_e2e_pipeline.py` 與 `docs/known-risks.md` R2。
+**v0.3 移除了語意邊界吸附**（見 known-risks R10），所以這裡只剩粗切與
+指派的測試。
 """
 
 from __future__ import annotations
 
-import numpy as np
 import pytest
 
 from weft.ir import SlideCandidate, TranscriptCue
-from weft.stages.align import (
-    HARD_SNAP_LIMIT_SEC,
-    Window,
-    assign_cues,
-    coarse_windows,
-    snap_boundary,
-)
+from weft.stages.align import Window, assign_cues, coarse_windows
 
 
 def candidate(index: int, t_start: float, t_end: float) -> SlideCandidate:
@@ -119,74 +112,11 @@ def test_empty_transcript_yields_empty_buckets():
 
 
 # --------------------------------------------------------------------------
-# 語意吸附（§4.6 步驟 2–3、關鍵約束）
+# §4.6：這一步不呼叫 LLM
 # --------------------------------------------------------------------------
 
 
-def fake_encoder(mapping: dict[str, np.ndarray]):
-    """把文字映到指定向量。這是**單元測試**（檔名含 `_unit_`），
-    §5.5 #10 允許；e2e 用真的 BGE-M3。"""
-
-    def encode(texts: list[str]) -> np.ndarray:
-        return np.stack([mapping[t] for t in texts])
-
-    return encode
-
-
-PREV = np.array([1.0, 0.0])
-NEXT = np.array([0.0, 1.0])
-
-
-def test_boundary_snaps_to_the_semantic_turning_point():
-    """講者在投影片切換**之前**就講完上一頁——邊界該往前吸。"""
-    cues = [
-        cue(0, 90.0, 95.0, "前頁內容甲"),
-        cue(1, 95.0, 100.0, "前頁內容乙"),
-        cue(2, 100.0, 105.0, "後頁內容甲"),  # 語意在此轉折
-        cue(3, 105.0, 110.0, "後頁內容乙"),
-    ]
-    encode = fake_encoder({
-        "前頁內容甲": PREV, "前頁內容乙": PREV,
-        "後頁內容甲": NEXT, "後頁內容乙": NEXT,
-        "前頁文字": PREV, "後頁文字": NEXT,
-    })
-
-    snapped, shift = snap_boundary(108.0, cues, "前頁文字", "後頁文字", encode, 20.0)
-    assert snapped == 100.0
-    assert shift == pytest.approx(-8.0)
-
-
-def test_snap_is_hard_limited_to_twenty_seconds():
-    """§4.6 關鍵約束：吸附範圍**硬限制在 ±20 秒內**。
-
-    這條測試刻意傳入一個過大的 window——設定檔調大它不該就能繞過約束。
-    """
-    cues = [cue(i, 100.0 + i * 20.0, 115.0 + i * 20.0, f"句{i}") for i in range(8)]
-    encode = fake_encoder({**{f"句{i}": (PREV if i < 6 else NEXT) for i in range(8)},
-                           "前": PREV, "後": NEXT})
-
-    snapped, shift = snap_boundary(140.0, cues, "前", "後", encode, window_sec=999.0)
-    assert abs(shift) <= HARD_SNAP_LIMIT_SEC
-
-
-def test_hard_limit_matches_sdd():
-    assert HARD_SNAP_LIMIT_SEC == 20.0
-
-
-def test_snap_is_skipped_without_slide_text():
-    """沒有 OCR 文字就無從比較語意，維持粗切。這是降級，不是失敗。"""
-    cues = [cue(i, 90.0 + i * 5.0, 95.0 + i * 5.0, f"句{i}") for i in range(4)]
-    snapped, shift = snap_boundary(100.0, cues, "", "後頁文字", lambda t: np.zeros((len(t), 2)), 20.0)
-    assert (snapped, shift) == (100.0, 0.0)
-
-
-def test_snap_is_skipped_with_too_few_nearby_cues():
-    snapped, shift = snap_boundary(100.0, [cue(0, 99.0, 101.0)], "前", "後",
-                                   lambda t: np.zeros((len(t), 2)), 20.0)
-    assert (snapped, shift) == (100.0, 0.0)
-
-
-def test_snap_does_not_call_an_llm():
+def test_align_does_not_call_an_llm():
     """§4.6：「這一步**不呼叫 LLM**，避免與 S4 形成循環依賴。」
 
     機械式護欄：align 模組不得引入任何雲端模型客戶端。
@@ -203,3 +133,16 @@ def test_snap_does_not_call_an_llm():
             names = {(getattr(node, "module", "") or "").split(".")[0]}
             names |= {a.name.split(".")[0] for a in node.names}
             assert not (names & forbidden), f"align.py 引入了雲端客戶端：{names & forbidden}"
+
+
+def test_semantic_snap_is_gone():
+    """v0.3 移除了語意邊界吸附。
+
+    這條測試釘住「它是被**刻意**移除的，不是漏掉」——吸附需要投影片文字，
+    而 v0.3 移除本地 OCR 後，投影片文字要到 S4 才有，§4.6 又禁止 S3 呼叫
+    LLM。若日後有人想加回來，得先解決這個順序問題。見 known-risks R10。
+    """
+    import weft.stages.align as align
+
+    assert not hasattr(align, "snap_boundary")
+    assert not hasattr(align, "Encoder")

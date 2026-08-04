@@ -46,16 +46,7 @@ class WorkPaths:
     def slide_image(self, index: int) -> Path:
         return self.slides_dir / f"slide_{index:03d}.png"
 
-    # S2 / S2b
-    @property
-    def ocr(self) -> Path:
-        return self.dir / "03_ocr.json"
-
-    @property
-    def lexicon(self) -> Path:
-        return self.dir / "04_lexicon.json"
-
-    # S1a / S2c
+    # S1a
     @property
     def transcript(self) -> Path:
         return self.dir / "05_transcript.json"

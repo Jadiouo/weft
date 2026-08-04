@@ -12,7 +12,7 @@ import json
 import logging
 
 from .config import Config
-from .ir import CandidateSet, Lexicon, Slide, Transcript, VideoMeta
+from .ir import CandidateSet, Slide, Transcript, VideoMeta
 from .paths import OutPaths, WorkPaths
 from .state import Stage, StageStatus, VideoState
 
@@ -27,9 +27,6 @@ def stage_params(cfg: Config, stage: Stage) -> str:
         Stage.S0_FETCH: cfg.s0,
         Stage.S1A_TRANSCRIPT: cfg.s1a,
         Stage.S1B_SLIDES: cfg.s1b,
-        Stage.S2_OCR: cfg.s2,
-        Stage.S2B_LEXICON: cfg.s2b,
-        Stage.S2C_CORRECT: cfg.s2c,
         Stage.S3_ALIGN: cfg.s3,
         Stage.S4_UNDERSTAND: cfg.s4,
         Stage.S5_SYNTHESIZE: cfg.s5,
@@ -110,7 +107,7 @@ def prepare_one(
         state.mark_done(Stage.S0_FETCH, stage_params(cfg, Stage.S0_FETCH))
         state.save(work.state)
 
-    # ---- S1b 投影片（先於 S1a：詞庫要餵給 Whisper 的 initial_prompt）----
+    # ---- S1b 靜止區段 ----
     if satisfied(Stage.S1B_SLIDES) and work.candidates.exists():
         candidates = CandidateSet.model_validate_json(work.candidates.read_text(encoding="utf-8"))
         slides = _slides_from(work, candidates)
@@ -119,37 +116,12 @@ def prepare_one(
         state.mark_done(Stage.S1B_SLIDES, stage_params(cfg, Stage.S1B_SLIDES))
         state.save(work.state)
 
-    # ---- S2 OCR ----
-    if satisfied(Stage.S2_OCR) and work.ocr.exists():
-        _apply_ocr(work, slides)
-    else:
-        slides = local.s2_ocr(cfg, work, slides)
-        state.mark_done(Stage.S2_OCR, stage_params(cfg, Stage.S2_OCR))
-        state.save(work.state)
-
-    # ---- S2b 詞庫（系列級）----
-    if satisfied(Stage.S2B_LEXICON) and work.lexicon.exists():
-        lexicon = Lexicon.model_validate_json(work.lexicon.read_text(encoding="utf-8"))
-    else:
-        lexicon = local.s2b_lexicon(cfg, work, slides, meta.series_id or series_id)
-        state.mark_done(Stage.S2B_LEXICON, stage_params(cfg, Stage.S2B_LEXICON))
-        state.save(work.state)
-
     # ---- S1a 逐字稿 ----
     if satisfied(Stage.S1A_TRANSCRIPT) and work.transcript.exists():
         transcript = Transcript.model_validate_json(work.transcript.read_text(encoding="utf-8"))
     else:
-        transcript = local.s1a_transcript(cfg, work, lexicon)
+        transcript = local.s1a_transcript(cfg, work)
         state.mark_done(Stage.S1A_TRANSCRIPT, stage_params(cfg, Stage.S1A_TRANSCRIPT))
-        state.save(work.state)
-
-    # ---- S2c 術語校正 ----
-    if not satisfied(Stage.S2C_CORRECT):
-        transcript = local.s2c_correct(cfg, work, transcript, lexicon)
-        note = "詞庫為空，已跳過（§4.5）" if not lexicon.entries else None
-        state.mark_done(Stage.S2C_CORRECT, stage_params(cfg, Stage.S2C_CORRECT), note=note)
-        if not lexicon.entries:
-            state.stages[Stage.S2C_CORRECT].status = StageStatus.SKIPPED
         state.save(work.state)
 
     # ---- S3 對齊 ----
@@ -176,19 +148,7 @@ def _slides_from(work: WorkPaths, candidates: CandidateSet) -> list[Slide]:
                 build_frames=c.build_frames,
             )
         )
-    _apply_ocr(work, slides)
     return slides
-
-
-def _apply_ocr(work: WorkPaths, slides: list[Slide]) -> None:
-    if not work.ocr.exists():
-        return
-    rows = {r["slide_id"]: r for r in json.loads(work.ocr.read_text(encoding="utf-8"))}
-    for slide in slides:
-        row = rows.get(slide.slide_id)
-        if row:
-            slide.ocr_text = row.get("ocr_text")
-            slide.ocr_confidence = row.get("ocr_confidence")
 
 
 def run_prepare(target: str, cfg: Config, force: bool = False) -> int:
@@ -255,16 +215,12 @@ def understand_one(video_id: str, cfg: Config) -> bool:
         Segment.model_validate(row)
         for row in json.loads(work.segments.read_text(encoding="utf-8"))
     ]
-    lexicon = (
-        Lexicon.model_validate_json(work.lexicon.read_text(encoding="utf-8"))
-        if work.lexicon.exists()
-        else None
-    )
     candidates = CandidateSet.model_validate_json(work.candidates.read_text(encoding="utf-8"))
     slides = _slides_from(work, candidates)
+    transcript = Transcript.model_validate_json(work.transcript.read_text(encoding="utf-8"))
 
-    # ---- S4 理解 ----
-    cloud.s4_understand(cfg, work, segments, lexicon)
+    # ---- S4 理解（含 is_slide 判定與術語校正）----
+    cloud.s4_understand(cfg, work, segments, slides, transcript)
     done = [s for s in segments if s.understanding is not None]
     state.understood_segments = [s.segment_id for s in done]
 
@@ -279,6 +235,8 @@ def understand_one(video_id: str, cfg: Config) -> bool:
     state.mark_done(Stage.S4_UNDERSTAND, stage_params(cfg, Stage.S4_UNDERSTAND))
     state.save(work.state)
 
+    # S4 可能改過逐字稿的 text_corrected（術語校正），落地
+    work.transcript.write_text(transcript.model_dump_json(indent=2), encoding="utf-8")
     ir = VideoIR(meta=meta, slides=slides, segments=segments)
 
     # ---- S5 統整 ----

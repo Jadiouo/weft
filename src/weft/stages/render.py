@@ -174,10 +174,20 @@ def write_debug_markdown(ir, work, path: Path) -> Path:
             lines.append(f"邊界吸附位移：{seg.boundary_shift_sec:+.1f}s（`{seg.boundary_method.value}`）")
         lines.append("")
 
-        slide = ir.slide_by_id(seg.slide_ref) if seg.slide_ref else None
+        understanding = seg.understanding
+        rejected = understanding is not None and not understanding.is_slide
+        shown_ref = seg.slide_ref or seg.candidate_ref
+        slide = ir.slide_by_id(shown_ref) if shown_ref else None
         if slide:
             rel = Path(slide.image_path)
             lines.append(f"![{slide.slide_id}]({rel.as_posix()})")
+            if rejected:
+                lines.append("")
+                lines.append(
+                    f"> ⚠️ VLM 判定**這不是投影片**："
+                    f"{understanding.reject_reason or '未說明'}"
+                    "　（此段已降級為 speaker_only，上圖僅供人工複核）"
+                )
             if slide.is_progressive_final:
                 lines.append("")
                 lines.append(
@@ -187,12 +197,14 @@ def write_debug_markdown(ir, work, path: Path) -> Path:
             lines.append("")
 
         if seg.corrections:
-            lines.append("**術語校正**：" + "、".join(
-                f"`{c.from_text}`→`{c.to_text}`（{c.score:.2f}）" for c in seg.corrections
-            ))
+            # 理由必須顯示——§5.6 的抽檢要判斷「改得對不對」，只看 from→to
+            # 是判斷不了的
+            lines.append("**術語校正**（VLM 對照投影片）：")
+            for c in seg.corrections:
+                lines.append(f"- `{c.from_text}` → `{c.to_text}`"
+                             + (f"　<sub>{c.reason}</sub>" if c.reason else ""))
             lines.append("")
 
-        understanding = seg.understanding
         if understanding is None:
             lines += ["_（此段無理解結果）_", ""]
         else:

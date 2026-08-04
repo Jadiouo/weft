@@ -24,9 +24,6 @@ s1a:
   language: zh
   beam_size: 5
   vad_filter: true
-  # 把系列術語詞庫餵進 initial_prompt，緩解文言文 ASR 問題（§9）
-  use_lexicon_prompt: true
-  lexicon_prompt_max_terms: 40
 
 # S1b 投影片候選幀（§4.3）
 s1b:
@@ -34,8 +31,6 @@ s1b:
   # 降解析度 + 模糊，壓制雷射筆紅點與壓縮雜訊（對抗樣本 A4）
   downscale_short_side: 180
   blur_sigma: 2.0
-  face_detector: yunet
-  face_min_area_ratio: 0.04
   # HMM：以「投影片會停留一段時間」為先驗，避免手調門檻
   hmm_self_transition: 0.97
   # 「同一頁」基線離散度的下限，作用在尺度無關的 ink Jaccard 上。
@@ -47,36 +42,10 @@ s1b:
   progressive_merge: true
   progressive_containment_ratio: 0.70
 
-# S2 OCR（§4.4）
-s2:
-  ocr_model: PaddleOCR-VL
-  lang: ch
-  use_gpu: false
-  # PaddleOCR 的 ch 模型輸出簡體，素材是繁體。不轉的話詞庫混入簡體詞條，
-  # §4.5 拿它比對繁體逐字稿會永遠匹配不到。
-  normalise_to_traditional: true
-
-# S2b 術語詞庫（§4.4）。scope 為系列級，不是單片級。
-s2b:
-  term_min_len: 2
-  term_max_len: 6
-  min_count: 1
-  bracket_extraction: true
-
-# S2c 逐字稿術語校正（§4.5）。品質關鍵路徑，不是可選功能。
-s2c:
-  similarity_threshold: 0.85
-  # 只在時間鄰近的投影片詞庫中比對，避免用第 40 分鐘的術語改第 5 分鐘的話
-  neighbor_window: 2
-  pinyin_weight: 0.7
-  shape_weight: 0.3
-
 # S3 對齊（§4.6）。這一步不呼叫 LLM。
+# v0.3 只做粗切——語意吸附需要投影片文字，而 v0.3 移除了本地 OCR，
+# 投影片文字要到 S4 才有。見 known-risks R10。
 s3:
-  embedding_model: BAAI/bge-m3
-  device: cuda
-  # 吸附範圍硬限制。放大此值等同繞過 §4.6 的設計約束。
-  snap_window_sec: 20.0
   min_segment_sec: 5.0
 
 # S4 聯合理解（§4.7）。唯一花額度的階段。

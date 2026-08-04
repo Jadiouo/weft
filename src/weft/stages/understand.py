@@ -33,6 +33,12 @@ class ApiKeyMissing(RuntimeError):
 #: 這裡刻意手寫而非從 pydantic 產生——Gemini 的 schema 方言只支援 OpenAPI
 #: 的子集（不吃 $defs／anyOf），自動轉換出來的東西會被靜默忽略，然後模型
 #: 回傳自由格式的 JSON，錯誤要到反序列化才浮現。
+#:
+#: **欄位順序有意義。** structured output 是逐欄生成的，先產生的欄位不能
+#: 因後面的內容而回頭修改。所以順序是：
+#:   is_slide → slide_text（逐字轉錄）→ content_blocks（詮釋）
+#: 讓模型**先把畫面上的字抄下來，再據以詮釋**。slide_text 同時是 §5.4
+#: 溯源檢查的比對來源，這個順序是它僅存的獨立性（見 known-risks R9）。
 RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -42,8 +48,23 @@ RESPONSE_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "segment_id": {"type": "string"},
-                    "summary": {"type": "string"},
+                    "is_slide": {"type": "boolean"},
+                    "reject_reason": {"type": "string"},
+                    "slide_text": {"type": "string"},
                     "layout_description": {"type": "string"},
+                    "corrections": {
+                        "type": "array",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "from": {"type": "string"},
+                                "to": {"type": "string"},
+                                "reason": {"type": "string"},
+                            },
+                            "required": ["from", "to", "reason"],
+                        },
+                    },
+                    "summary": {"type": "string"},
                     "content_blocks": {
                         "type": "array",
                         "items": {
@@ -65,7 +86,10 @@ RESPONSE_SCHEMA = {
                     },
                     "terms": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["segment_id", "summary", "content_blocks", "terms"],
+                "required": [
+                    "segment_id", "is_slide", "slide_text",
+                    "corrections", "summary", "content_blocks", "terms",
+                ],
             },
         }
     },
@@ -74,13 +98,52 @@ RESPONSE_SCHEMA = {
 
 
 SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的系統做內容理解。
-你會拿到一段影片的投影片畫面與該時段的逐字稿，要輸出結構化的理解結果。
+你會拿到一段影片的**代表畫面**與該時段的逐字稿。
+
+代表畫面是自動抽出的——系統只知道「這段時間畫面是靜止的」，**不知道那是
+投影片還是講者鏡頭**。判斷它是什麼，是你的第一項工作。
+
+## 你的四項工作，按順序
+
+### 1. 判斷這張圖是不是投影片（`is_slide`）
+
+**是投影片**：畫面主體為文字、圖表、經文、流程圖等準備好的教材內容。
+**不是投影片**：講者的攝影棚鏡頭、片頭片尾動畫、純裝飾畫面。
+
+注意：講者所在的攝影棚背景**經常有大量裝飾文字**（標語、書法、招牌）。
+那些是**佈景**，不是投影片內容。判斷依據是「這是為了講解而製作的教材」，
+不是「畫面上有沒有字」。
+
+`is_slide: false` 時，填 `reject_reason`（一句話），`slide_text` 留空字串，
+`content_blocks` 只能用 `provenance_kind: "transcript"`。
+
+### 2. 逐字轉錄投影片上的文字（`slide_text`）
+
+**先抄，再詮釋。** 把畫面上的文字**原樣**打出來，保留換行與排列順序
+（直排請由右至左、由上而下）。這一欄是後續溯源檢查的比對基準，
+**不要在這裡改寫、摘要或補充**。
+
+`is_slide: false` 時填空字串。
+
+### 3. 對照投影片修正逐字稿的錯字（`corrections`）
+
+逐字稿來自語音辨識或字幕，專有術語常出現**同音錯字**。你同時看得到
+投影片上的正確寫法與逐字稿，請找出這類錯誤。
+
+每一筆填 `{"from": 逐字稿中的錯字, "to": 正確寫法, "reason": 理由}`。
+
+規則：
+- `from` 必須是**逐字稿中實際出現的字串**，一字不差
+- 只改**有把握**的：正確寫法出現在這張投影片上，且與錯字同音或近音
+- **寧可漏改，不可亂改。** 講者本來就講對的詞不要動；一般用語不要動
+- 沒有要改的就回空陣列
+
+### 4. 理解與結構化（`summary`、`content_blocks`、`terms`）
 
 ## 絕對規則
 
-1. **不得推測畫面上與逐字稿中都沒有的資訊。** 人名、書名、數字、年代尤其
-   如此。你寫下的每一個具體事實都必須能在來源中找到。系統會做自動溯源
-   檢查，編造的內容會被標記並退回。
+1. **不得推測畫面上與逐字稿中都沒有的資訊。** 人名、書名、數字、年代
+   尤其如此。系統會做自動溯源檢查，編造的內容會被標記並退回。
 
 2. **每個 content_block 都必須標註來源**：
    - `provenance_kind: "slide_ocr"` + `provenance_ref: "<slide_id>"`
@@ -88,9 +151,8 @@ SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的�
    - `provenance_kind: "transcript"` + `provenance_ref: "<起秒>-<迄秒>"`
      ——內容取自講者口述
 
-3. **展開所有指涉性語句。** 「這個式子」要寫成它實際指的東西，「前面提到
-   的」要寫出前面提到的是什麼。輸出的每一段文字都會被單獨取出當作檢索
-   結果，讀者看不到上下文。
+3. **展開所有指涉性語句。** 「這個式子」要寫成它實際指的東西。輸出的每
+   一段文字都會被單獨取出當作檢索結果，讀者看不到上下文。
 
 4. **不要只做複製貼上。** `白話解說` 與 `口頭延伸` 必須是理解與整合後的
    表述；系統會檢查逐字複製率，整段照抄會被判為失敗。
@@ -109,9 +171,8 @@ SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的�
 
 ## layout_description
 
-用一段文字描述這一頁的版面結構與其語意，不只是列出文字。例如：
-「上方為四張胚胎顯微照片（第一至第四周），下方紫底區塊為經文引文，
-右側以箭頭指向對應的白話解說。」
+用一段文字描述這一頁的版面結構與其語意，不只是列出文字。
+`is_slide: false` 時可留空。
 """
 
 
@@ -144,29 +205,18 @@ def _client():
     return genai.Client(api_key=key)
 
 
-def build_prompt(segments, slides_by_id, prev_summary: str | None, lexicon_terms: list[str]) -> str:
+def build_prompt(segments, prev_summary: str | None) -> str:
     """組出一次呼叫的使用者訊息。SDD §4.7 的輸入清單。"""
     parts: list[str] = []
     if prev_summary:
         parts.append(f"## 前一段的摘要（僅供銜接，不要重複其內容）\n{prev_summary}\n")
-    if lexicon_terms:
-        parts.append(
-            "## 本系列的術語（逐字稿已用它校正過，請沿用這些寫法）\n"
-            + "、".join(lexicon_terms)
-            + "\n"
-        )
 
     for seg in segments:
         header = f"## segment {seg.segment_id}（{seg.t_start:.1f}s – {seg.t_end:.1f}s）"
-        if seg.mode.value == "slide" and seg.slide_ref:
-            header += f"\n投影片：{seg.slide_ref}（圖見下方附件）"
-            ocr = (slides_by_id.get(seg.slide_ref) or "").strip()
-            if ocr:
-                header += f"\n投影片 OCR 文字（供對照，畫面為準）：\n{ocr}"
-        elif seg.mode.value == "speaker_only":
-            header += "\n此段畫面為講者，無投影片。"
+        if seg.candidate_ref:
+            header += f"\n代表畫面：{seg.candidate_ref}（圖見附件，依序對應）"
         else:
-            header += "\n此段無投影片畫面。"
+            header += "\n此段沒有代表畫面（純逐字稿）。"
 
         transcript = (seg.transcript_corrected or seg.transcript_raw).strip()
         header += f"\n\n逐字稿：\n{transcript or '（此段無逐字稿）'}"
@@ -177,13 +227,10 @@ def build_prompt(segments, slides_by_id, prev_summary: str | None, lexicon_terms
     )
     return "\n\n".join(parts)
 
-
 def call_gemini(
     segments,
-    slides_by_id: dict[str, str],
     image_paths: dict[str, Path],
     prev_summary: str | None,
-    lexicon_terms: list[str],
     cfg,
 ) -> BatchResult:
     """送出一次批次呼叫。SDD §4.7。
@@ -195,10 +242,10 @@ def call_gemini(
     from google.genai import types
 
     client = _client()
-    contents: list = [build_prompt(segments, slides_by_id, prev_summary, lexicon_terms)]
+    contents: list = [build_prompt(segments, prev_summary)]
 
     for seg in segments:
-        path = image_paths.get(seg.slide_ref or "")
+        path = image_paths.get(seg.candidate_ref or "")
         if path and path.exists():
             contents.append(
                 types.Part.from_bytes(data=path.read_bytes(), mime_type="image/png")
@@ -225,6 +272,69 @@ def call_gemini(
     )
 
 
+def validate_corrections(raw: dict, segment) -> list:
+    """把模型回傳的校正轉成 IR 的 Correction，並**丟掉對不上原文的**。
+
+    §5.3 不變量 10 要求每一筆的 `from` 字串實際出現在 `transcript_raw` 中。
+    模型偶爾會回傳改寫過的片段（例如加了標點、或抄成了正確版本），那種
+    校正無法套用也無法稽核，**丟掉並記錄**——不做模糊比對硬套上去。
+    """
+    from ..ir import Correction, CorrectionMethod
+
+    out: list = []
+    seen: set[tuple[str, str]] = set()
+    for item in raw.get("corrections", []):
+        from_text = (item.get("from") or "").strip()
+        to_text = (item.get("to") or "").strip()
+        if not from_text or not to_text or from_text == to_text:
+            continue
+        if from_text not in segment.transcript_raw:
+            log.warning("%s：校正 %r→%r 的原字串不在逐字稿中，已丟棄（§5.3 不變量 10）",
+                        segment.segment_id, from_text, to_text)
+            continue
+        if (from_text, to_text) in seen:
+            continue
+        seen.add((from_text, to_text))
+        out.append(
+            Correction(
+                **{
+                    "from": from_text,
+                    "to": to_text,
+                    "source": segment.candidate_ref or segment.segment_id,
+                    "method": CorrectionMethod.VLM,
+                    "reason": (item.get("reason") or "").strip(),
+                }
+            )
+        )
+    return out
+
+
+def apply_corrections(transcript, segment, corrections) -> None:
+    """把校正套用到該 segment 涵蓋的逐字稿句子上。
+
+    **只改 `text_corrected`，`text_raw` 永不覆寫**（§4.5 約束 3、§5.3 不變量 9）。
+    套用後重建 `segment.transcript_corrected`，讓 segment 與 cue 兩層一致——
+    不一致的話 §5.4 的溯源檢查會拿到與 debug markdown 不同的文字。
+    """
+    by_index = {c.index: c for c in transcript.cues}
+    for index in segment.cue_indices:
+        cue = by_index.get(index)
+        if cue is None:
+            continue
+        text = cue.text_corrected or cue.text_raw
+        applied = []
+        for correction in corrections:
+            if correction.from_text in cue.text_raw:
+                text = text.replace(correction.from_text, correction.to_text)
+                applied.append(correction)
+        cue.text_corrected = text
+        cue.corrections = applied
+
+    picked = [by_index[i] for i in segment.cue_indices if i in by_index]
+    segment.transcript_corrected = "".join(c.text_corrected or c.text_raw for c in picked)
+    segment.corrections = list(corrections)
+
+
 def to_understanding(raw: dict, segment, cfg):
     """把模型回傳的 dict 轉成 IR 的 Understanding。
 
@@ -234,12 +344,21 @@ def to_understanding(raw: dict, segment, cfg):
     """
     from ..ir import ContentBlock, ContentType, Provenance, ProvenanceKind, Understanding
 
+    is_slide = bool(raw.get("is_slide", True))
+    slide_text = (raw.get("slide_text") or "").strip()
+
     blocks = []
     for i, item in enumerate(raw.get("content_blocks", [])):
         kind = item.get("provenance_kind")
         ref = (item.get("provenance_ref") or "").strip()
         if not kind or not ref:
             log.warning("%s 的 block#%d 缺 provenance，已丟棄（§5.3 不變量 7）",
+                        segment.segment_id, i)
+            continue
+        # 判定不是投影片時，不得有 slide_ocr 來源的 block——沒有投影片可溯源。
+        # 這是 prompt 已明說的規則，但模型不一定照做，所以這裡也擋一次。
+        if not is_slide and kind == "slide_ocr":
+            log.warning("%s 的 block#%d 宣稱來自投影片，但該段判定不是投影片，已丟棄",
                         segment.segment_id, i)
             continue
         try:
@@ -254,6 +373,10 @@ def to_understanding(raw: dict, segment, cfg):
             log.warning("%s 的 block#%d 格式不符（%s），已丟棄", segment.segment_id, i, exc)
 
     return Understanding(
+        is_slide=is_slide,
+        reject_reason=(raw.get("reject_reason") or "").strip() or None if not is_slide else None,
+        slide_text=slide_text or None,
+        corrections=validate_corrections(raw, segment),
         summary=(raw.get("summary") or "").strip(),
         layout_description=(raw.get("layout_description") or "").strip() or None,
         content_blocks=blocks,

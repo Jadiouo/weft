@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 
 from ..config import Config
-from ..ir import Chunk, Lexicon, Segment, Understanding, VideoIR
+from ..ir import Chunk, Segment, Slide, Understanding, VideoIR
 from ..paths import OutPaths, WorkPaths
 from . import pending
 
@@ -26,29 +26,35 @@ def s4_understand(
     cfg: Config,
     work: WorkPaths,
     segments: list[Segment],
-    lexicon: Lexicon | None,
+    slides: list[Slide],
+    transcript=None,
 ) -> list[Understanding]:
     """S4 聯合理解。SDD §4.7。
+
+    **v0.3 起 S4 多了兩項職責**（原本由 S2/S2b/S2c 的本地 OCR 鏈負責）：
+      1. 判斷候選幀是不是投影片（`is_slide`）——不是就把該段降級為
+         speaker_only 並清掉 slide_ref
+      2. 對照投影片修正逐字稿的同音錯字，回傳可稽核的 corrections
 
     冪等鍵：segment_id + prompt_version + model
     失敗行為：單一 segment 失敗 → 重試 2 次（指數退避）→ understanding=null，繼續
     """
-    import json
-
+    from ..ir import SegmentMode
     from ..quota import QuotaExhausted, QuotaLedger
-    from .understand import ApiKeyMissing, call_gemini, to_understanding, with_retries
+    from .understand import (
+        ApiKeyMissing,
+        apply_corrections,
+        call_gemini,
+        to_understanding,
+        with_retries,
+    )
 
     p = cfg.s4
     ledger = QuotaLedger(OutPaths(cfg.out_dir).quota_db, cfg.quota)
     work.understanding_dir.mkdir(parents=True, exist_ok=True)
 
-    slides_by_id: dict[str, str] = {}
-    if work.ocr.exists():
-        for row in json.loads(work.ocr.read_text(encoding="utf-8")):
-            slides_by_id[row["slide_id"]] = row.get("ocr_text") or ""
-    image_paths = {sid: work.slides_dir / f"{sid}.png" for sid in slides_by_id}
-
-    terms = [e.term for e in (lexicon.entries if lexicon else [])][:60]
+    by_slide_id = {s.slide_id: s for s in slides}
+    image_paths = {s.slide_id: work.dir / s.image_path for s in slides}
 
     results: list[Understanding] = []
     prev_summary: str | None = None
@@ -70,9 +76,7 @@ def s4_understand(
 
         try:
             batch_result = with_retries(
-                lambda b=batch: call_gemini(
-                    b, slides_by_id, image_paths, prev_summary, terms, p
-                ),
+                lambda b=batch: call_gemini(b, image_paths, prev_summary, p),
                 p.max_retries,
                 p.retry_backoff_sec,
             )
@@ -100,12 +104,33 @@ def s4_understand(
                 continue
             understanding = to_understanding(raw, seg, p)
             seg.understanding = understanding
+
+            # VLM 判定不是投影片 → 降級。slide_ref 清掉（沒有投影片可指向），
+            # candidate_ref 保留，讓 debug markdown 還能顯示被拒絕的那張圖。
+            if not understanding.is_slide:
+                seg.mode = SegmentMode.SPEAKER_ONLY
+                seg.slide_ref = None
+                log.info("%s：VLM 判定不是投影片（%s）", seg.segment_id,
+                         understanding.reject_reason or "未說明")
+            elif seg.slide_ref and understanding.slide_text:
+                # VLM 讀出的投影片文字是 §5.4 溯源檢查的比對來源
+                slide = by_slide_id.get(seg.slide_ref)
+                if slide is not None:
+                    slide.slide_text = understanding.slide_text
+                    slide.layout_description = understanding.layout_description
+
+            if understanding.corrections and transcript is not None:
+                apply_corrections(transcript, seg, understanding.corrections)
+
             results.append(understanding)
             prev_summary = understanding.summary[: p.prev_summary_max_chars]
             _save(work, seg, understanding)
 
-    log.info("S4 %s：%d/%d 個 segment 完成。%s",
-             work.video_id, len(results), len(segments), ledger.summary())
+    confirmed = sum(1 for u in results if u.is_slide)
+    corrected = sum(len(u.corrections) for u in results)
+    log.info("S4 %s：%d/%d 個 segment 完成（%d 個判定為投影片，%d 筆術語校正）。%s",
+             work.video_id, len(results), len(segments), confirmed, corrected,
+             ledger.summary())
     return results
 
 

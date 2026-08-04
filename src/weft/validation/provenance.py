@@ -170,7 +170,10 @@ def resolve_source(ir: VideoIR, block: ContentBlock, segment_transcript: str) ->
     """取出 provenance 指向的來源文字。"""
     if block.provenance.kind is ProvenanceKind.SLIDE_OCR:
         slide = ir.slide_by_id(block.provenance.ref)
-        return slide.ocr_text or "" if slide else ""
+        # v0.3：來源是 **VLM 讀出的**投影片文字（原本是獨立的本地 OCR）。
+        # 這削弱了本檢查的獨立性——見 known-risks R9。prompt 以「先逐字
+        # 轉錄、再詮釋」的欄位順序保留部分獨立性。
+        return slide.slide_text or "" if slide else ""
     return segment_transcript
 
 

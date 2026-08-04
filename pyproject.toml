@@ -12,16 +12,17 @@ dependencies = [
     "pyyaml>=6.0",
     "numpy>=1.26",
     "pillow>=10.0",
-    # 上限刻意鎖 <5：OpenCV 5.0 移除了 CascadeClassifier，且 PaddleOCR（S2）
-    # 生態仍綁 4.x。放寬前請先驗證 S1b 與 S2。
+    # v0.3 移除了人臉偵測與 PaddleOCR，鎖 <5 的兩個理由都消失了。
+    # 仍保留上限是因為尚未在 5.x 上實測 S1b；放寬前請先跑 A1–A7。
     "opencv-python-headless>=4.10,<5",
 ]
 
 [project.optional-dependencies]
+# v0.3 移除了 PaddleOCR（本地 OCR）、jieba/pypinyin/zhconv（詞庫與術語校正）、
+# sentence-transformers（S3 語意吸附）。這些職責改由 S4 的 VLM 承擔。
+# **不要為了「備用」把 paddleocr 加回來**——留著就會有人去修它。
 gpu = [
     "faster-whisper>=1.0",
-    "sentence-transformers>=3.0",
-    "paddleocr",
 ]
 dev = ["pytest>=8.0", "rich>=13.0"]
 

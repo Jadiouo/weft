@@ -49,7 +49,8 @@ def make_transcript() -> Transcript:
     # 第 2 句有一處術語校正：時運 → 識蘊
     cues[2].text_corrected = cues[2].text_raw.replace("時運", "識蘊")
     cues[2].corrections = [
-        Correction(**{"from": "時運", "to": "識蘊", "source": "slide_001", "method": "lexicon", "score": 0.91})
+        Correction(**{"from": "時運", "to": "識蘊", "source": "slide_001",
+                      "method": "vlm", "reason": "投影片作「識蘊」，逐字稿同音誤植"})
     ]
     return Transcript(
         video_id=VIDEO_ID,
@@ -73,8 +74,7 @@ def make_ir(base_dir: Path, with_understanding: bool = True) -> VideoIR:
             t_last_seen=60.0,
             is_progressive_final=True,
             build_frames=[22.0, 35.0],
-            ocr_text=SLIDE_OCR,
-            ocr_confidence=0.87,
+            slide_text=SLIDE_OCR,
         )
     ]
 
@@ -120,6 +120,7 @@ def make_ir(base_dir: Path, with_understanding: bool = True) -> VideoIR:
             t_start=20.0,
             t_end=90.0,
             mode=SegmentMode.SLIDE,
+            candidate_ref="slide_001",
             slide_ref="slide_001",
             cue_indices=[1, 2, 3],
             transcript_raw="".join(c.text_raw for c in transcript.cues[1:]),

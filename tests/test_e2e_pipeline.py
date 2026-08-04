@@ -22,7 +22,6 @@ from weft.validation import invariants as inv
 from weft.validation.thresholds import (
     BOUNDARY_F1_SYNTHETIC,
     BOUNDARY_TOLERANCE_SEC,
-    FRAME_CLASS_ACCURACY,
     PROGRESSIVE_MERGE_ACCURACY,
     PROVENANCE_PASS_RATE,
 )
@@ -94,26 +93,19 @@ def test_progressive_keyframe_is_the_most_complete_frame(synth_work, cfg: Config
 
 
 @pytest.mark.synth
-def test_speaker_slide_classification_accuracy(synth_work, cfg: Config):
-    """§5.2：speaker/slide 分類 accuracy ≥ 0.95。"""
+def test_interleaved_speaker_and_slides_are_not_over_segmented(synth_work, cfg: Config):
+    """A6：講者頁與投影片頁交錯。
+
+    **v0.3 改變了期望行為。** 舊版量 speaker/slide 分類 accuracy；v0.3 沒有
+    分類器了（見 docs/decisions.md D16），改為驗證區段數量合理——每個
+    邏輯頁面（3 張投影片 + 2 段講者）各自成段，不該爆量。
+    """
     from tests.synth.scenarios import A6
     from weft.stages.local import s1b_slides
-    from weft.validation.metrics import classification_accuracy
 
-    candidates, _slides = s1b_slides(cfg, WorkPaths(synth_work, A6.name))
-
-    predicted = [str(f.frame_class) for f in candidates.frames]
-    assert classification_accuracy(predicted, A6.frame_classes()) >= FRAME_CLASS_ACCURACY
-
-
-@pytest.mark.synth
-def test_speaker_only_video_yields_zero_slides(synth_work, cfg: Config):
-    """A3：純講者必須偵測為 0 頁，且**不中斷**——退化為 mode=transcript_only（§4.3）。"""
-    from tests.synth.scenarios import A3
-    from weft.stages.local import s1b_slides
-
-    _candidates, slides = s1b_slides(cfg, WorkPaths(synth_work, A3.name))
-    assert slides == []
+    _candidates, slides = s1b_slides(cfg, WorkPaths(synth_work, A6.name))
+    # 5 個邏輯頁面；容許 ±2 的偏差（轉場、片頭）
+    assert 3 <= len(slides) <= 7, f"A6 切成 {len(slides)} 段，與 5 個邏輯頁面差距過大"
 
 
 @pytest.mark.synth
@@ -129,9 +121,7 @@ def test_local_pipeline_satisfies_all_invariants(synth_work, cfg: Config, scenar
     管線輸出**——時間戳來自 ffmpeg 抽幀、segment 來自 HMM、cue 指派來自
     對齊。不變量 1/2/3 的連鎖失敗只有在這種條件下才看得出來。
 
-    OCR 需要 GPU 環境，故此處以無 OCR 的降級路徑執行（§4.5：詞庫為空
-    → S2c 跳過；§4.6：無投影片文字 → 停在粗切）。含 OCR 的完整鏈見
-    `test_local_pipeline_with_ocr`。
+    v0.3 的本地管線只剩 S1b → S1a → S3，全部不需要 GPU 也不花額度。
     """
     from tests.synth.scenarios import BY_NAME
     from weft.ir import Transcript, VideoIR, VideoMeta
@@ -141,9 +131,7 @@ def test_local_pipeline_satisfies_all_invariants(synth_work, cfg: Config, scenar
     work = WorkPaths(synth_work, scenario_name)
 
     candidates, slides = local.s1b_slides(cfg, work)
-    lexicon = local.s2b_lexicon(cfg, work, slides, "PL_synthetic")
-    transcript = local.s1a_transcript(cfg, work, lexicon)
-    transcript = local.s2c_correct(cfg, work, transcript, lexicon)
+    transcript = local.s1a_transcript(cfg, work)
     segments = local.s3_align(cfg, work, transcript, candidates)
 
     ir = VideoIR(
@@ -156,84 +144,6 @@ def test_local_pipeline_satisfies_all_invariants(synth_work, cfg: Config, scenar
 
     # 覆蓋率與 ground truth 一致
     assert segments[-1].t_end == pytest.approx(truth.duration, abs=1.0)
-
-
-@pytest.mark.synth
-@pytest.mark.gpu
-def test_local_pipeline_with_ocr(synth_work, cfg: Config):
-    """含 OCR 的完整鏈。驗證 §4.5 的術語校正真的在管線中發生。"""
-    from tests.synth.scenarios import A1
-    from weft.stages import local
-    from weft.stages.ocr import OcrUnavailable
-
-    work = WorkPaths(synth_work, A1.name)
-    candidates, slides = local.s1b_slides(cfg, work)
-    try:
-        slides = local.s2_ocr(cfg, work, slides)
-    except OcrUnavailable as exc:
-        pytest.skip(f"OCR 不可用：{exc}")
-
-    assert any((s.ocr_text or "").strip() for s in slides), "OCR 沒有讀出任何文字"
-
-    lexicon = local.s2b_lexicon(cfg, work, slides, "PL_synthetic")
-    assert lexicon.entries, "詞庫為空——S2c 會整段跳過"
-
-    transcript = local.s1a_transcript(cfg, work, lexicon)
-    transcript = local.s2c_correct(cfg, work, transcript, lexicon)
-    segments = local.s3_align(cfg, work, transcript, candidates)
-
-    from weft.ir import VideoIR, VideoMeta
-
-    ir = VideoIR(
-        meta=VideoMeta.model_validate_json(work.meta.read_text(encoding="utf-8")),
-        slides=slides,
-        segments=segments,
-    )
-    violations = inv.check_all(ir, transcript, work.dir)
-    assert violations == [], "\n".join(str(v) for v in violations)
-
-
-@pytest.mark.synth
-@pytest.mark.gpu
-def test_term_correction_precision_on_synthetic(synth_work, cfg: Config):
-    """§5.2：術語校正 precision ≥ 0.90。寧可漏改，不可亂改。
-
-    合成素材版：逐字稿中注入真實中文 ASR 會犯的同音錯（經血/精血、
-    羊神/陽神、形照/形兆、時運/識蘊），正解一定出現在同時段的投影片上。
-    這與 §5.1（B）的真實影片黃金集互補——黃金集測真實 Whisper 的錯誤
-    分布，這裡測演算法在已知錯誤下的行為，成本低且可重現。
-
-    §5.5 #7：**不得為了讓測試通過而調低此門檻。**
-    """
-    from tests.synth.scenarios import A1
-    from weft.stages import local
-    from weft.stages.ocr import OcrUnavailable
-    from weft.validation.metrics import correction_outcome_prf
-    from weft.validation.thresholds import TERM_CORRECTION_PRECISION
-
-    work = WorkPaths(synth_work, A1.name)
-    _candidates, slides = local.s1b_slides(cfg, work)
-    try:
-        slides = local.s2_ocr(cfg, work, slides)
-    except OcrUnavailable as exc:
-        pytest.skip(f"OCR 不可用：{exc}")
-
-    lexicon = local.s2b_lexicon(cfg, work, slides, "PL_synthetic")
-    transcript = local.s1a_transcript(cfg, work, lexicon)
-    transcript = local.s2c_correct(cfg, work, transcript, lexicon)
-
-    ideal = {
-        i: (text.replace(err[0], err[1]) if err else text)
-        for i, (_, _, text, err) in enumerate(A1.all_cues)
-    }
-    corrected = {c.index: (c.text_corrected or c.text_raw) for c in transcript.cues}
-    applied = [(c.index, x.from_text, x.to_text) for c in transcript.cues for x in c.corrections]
-
-    prf = correction_outcome_prf(applied, A1.expected_corrections, ideal, corrected)
-    assert prf.precision >= TERM_CORRECTION_PRECISION, f"{prf}\n  套用：{applied}"
-
-    wrong = {i: (corrected[i], ideal[i]) for i in ideal if corrected[i] != ideal[i]}
-    assert not wrong, f"校正後仍與理想文字不符：{wrong}"
 
 
 # --------------------------------------------------------------------------

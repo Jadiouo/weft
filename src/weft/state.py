@@ -18,9 +18,6 @@ class Stage(StrEnum):
     S0_FETCH = "S0"
     S1A_TRANSCRIPT = "S1a"
     S1B_SLIDES = "S1b"
-    S2_OCR = "S2"
-    S2B_LEXICON = "S2b"
-    S2C_CORRECT = "S2c"
     S3_ALIGN = "S3"
     S4_UNDERSTAND = "S4"
     S5_SYNTHESIZE = "S5"
@@ -32,10 +29,7 @@ DEPENDENCIES: dict[Stage, tuple[Stage, ...]] = {
     Stage.S0_FETCH: (),
     Stage.S1A_TRANSCRIPT: (Stage.S0_FETCH,),
     Stage.S1B_SLIDES: (Stage.S0_FETCH,),
-    Stage.S2_OCR: (Stage.S1B_SLIDES,),
-    Stage.S2B_LEXICON: (Stage.S2_OCR,),
-    Stage.S2C_CORRECT: (Stage.S1A_TRANSCRIPT, Stage.S2B_LEXICON),
-    Stage.S3_ALIGN: (Stage.S2C_CORRECT, Stage.S1B_SLIDES),
+    Stage.S3_ALIGN: (Stage.S1A_TRANSCRIPT, Stage.S1B_SLIDES),
     Stage.S4_UNDERSTAND: (Stage.S3_ALIGN,),
     Stage.S5_SYNTHESIZE: (Stage.S4_UNDERSTAND,),
     Stage.S6_RENDER: (Stage.S5_SYNTHESIZE,),
@@ -46,9 +40,6 @@ PREPARE_STAGES: tuple[Stage, ...] = (
     Stage.S0_FETCH,
     Stage.S1A_TRANSCRIPT,
     Stage.S1B_SLIDES,
-    Stage.S2_OCR,
-    Stage.S2B_LEXICON,
-    Stage.S2C_CORRECT,
     Stage.S3_ALIGN,
 )
 UNDERSTAND_STAGES: tuple[Stage, ...] = (

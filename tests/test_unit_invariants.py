@@ -247,7 +247,7 @@ def test_rule_10_detects_untraceable_correction(legal_ir):
     ir, transcript, _ = legal_ir
     transcript.cues[2].corrections = [
         Correction(**{"from": "根本沒出現過的詞", "to": "識蘊", "source": "slide_001",
-                      "method": "lexicon", "score": 0.9})
+                      "method": "vlm", "reason": "測試用"})
     ]
     assert 10 in rules_hit(inv.rule_10_corrections_traceable(ir, transcript))
 
