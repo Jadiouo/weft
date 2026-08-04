@@ -49,8 +49,30 @@ PROVENANCE_PASS_RATE: Final[float] = 0.95
 #: 不進入 chunks.jsonl。
 MAX_UNVERIFIED_RATIO: Final[float] = 0.05
 
+# --------------------------------------------------------------------------
+# 以下**不是** §5.2 的驗收門檻，而是 §4.9／§5.3 的處理參數。
+# 它們可以經設定檔調整；上面那些不行。
+# --------------------------------------------------------------------------
+
 #: §4.9 chunk 切分規則：單一 content_block 超過此字數則按句切分。
+#: 這是處理參數而非驗收門檻——`S6Config.max_chunk_chars` 以它為預設值。
 MAX_CHUNK_CHARS: Final[int] = 800
 
 #: §5.3 不變量 2：segments 聯集等於影片全長的容忍值（秒）。
 COVERAGE_TOLERANCE_SEC: Final[float] = 1.0
+
+
+#: §5.2 的驗收門檻名稱。**這些不得出現在設定檔中**（§5.5 #7）。
+#: 機械式護欄見 `test_unit_conventions.py`。
+ACCEPTANCE_THRESHOLDS: Final[frozenset[str]] = frozenset({
+    "BOUNDARY_F1_SYNTHETIC",
+    "BOUNDARY_F1_REAL",
+    "FRAME_CLASS_ACCURACY",
+    "PROGRESSIVE_MERGE_ACCURACY",
+    "TERM_CORRECTION_PRECISION",
+    "TERM_CORRECTION_RECALL",
+    "ALIGNMENT_MEDIAN_ERROR_SEC",
+    "PROVENANCE_PASS_RATE",
+    "MAX_UNVERIFIED_RATIO",
+    "BOUNDARY_TOLERANCE_SEC",
+})

@@ -38,17 +38,23 @@ s1b:
   face_min_area_ratio: 0.04
   # HMM：以「投影片會停留一段時間」為先驗，避免手調門檻
   hmm_self_transition: 0.97
-  hmm_emission_scale: 12.0
+  # 「同一頁」基線離散度的下限，作用在尺度無關的 ink Jaccard 上。
+  # 沒有它，完全沒換頁的影片（A4）會把量化雜訊當成離群值。見 decisions.md D7。
+  min_ink_change: 0.01
   min_slide_duration_sec: 3.0
-  # 逐條動畫合併（對抗樣本 A2，門檻 1.00）
+  # 逐條動畫合併（對抗樣本 A2，門檻 1.00）。0.70 取自實測分離區間：
+  # build 的 containment 0.86–0.98，真正換頁 ≤0.56。見 decisions.md D8。
   progressive_merge: true
-  progressive_containment_ratio: 0.85
+  progressive_containment_ratio: 0.70
 
 # S2 OCR（§4.4）
 s2:
   ocr_model: PaddleOCR-VL
   lang: ch
   use_gpu: false
+  # PaddleOCR 的 ch 模型輸出簡體，素材是繁體。不轉的話詞庫混入簡體詞條，
+  # §4.5 拿它比對繁體逐字稿會永遠匹配不到。
+  normalise_to_traditional: true
 
 # S2b 術語詞庫（§4.4）。scope 為系列級，不是單片級。
 s2b:

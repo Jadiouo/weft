@@ -88,6 +88,22 @@ def _extract_classic(result) -> tuple[str, float]:
     return "\n".join(lines), (sum(scores) / len(scores) if scores else 0.0)
 
 
+def to_traditional(text: str) -> str:
+    """統一轉繁體。
+
+    PaddleOCR 的 `ch` 模型輸出**簡體**，但本專案的素材是繁體（zh-Hant 字幕、
+    繁體投影片）。不轉的話詞庫會混入簡體詞條，而 §4.5 的術語校正是拿詞庫去
+    比對繁體逐字稿——簡體詞條永遠匹配不到，等於白建。
+
+    實測：真實素材的 slide_002 OCR 出現「万批交城」「冷顺型辉」等簡體字。
+    """
+    if not text:
+        return text
+    from zhconv import convert
+
+    return convert(text, "zh-hant")
+
+
 def run_ocr(images: list[Path], cfg) -> list[tuple[str, float]]:
     """對每張圖做 OCR，回傳 `(text, confidence)`。
 
@@ -106,12 +122,13 @@ def run_ocr(images: list[Path], cfg) -> list[tuple[str, float]]:
     for image in images:
         try:
             if kind == "vl":
-                out.append(_extract_vl(engine.predict(str(image))))
+                text, conf = _extract_vl(engine.predict(str(image)))
             elif kind == "v3":
-                out.append(_extract_classic(engine.predict(str(image))))
+                text, conf = _extract_classic(engine.predict(str(image)))
             else:
-                out.append(_extract_classic(engine.ocr(str(image), cls=True)))
+                text, conf = _extract_classic(engine.ocr(str(image), cls=True))
         except Exception as exc:  # noqa: BLE001
             log.warning("%s 的 OCR 失敗：%s", image.name, exc)
-            out.append(("", 0.0))
+            text, conf = "", 0.0
+        out.append((to_traditional(text) if cfg.normalise_to_traditional else text, conf))
     return out

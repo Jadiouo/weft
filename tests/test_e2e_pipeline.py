@@ -11,6 +11,8 @@ Phase 0 的完成條件：「跑 pytest 會失敗，但失敗訊息清楚指出�
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from weft.config import Config
@@ -234,16 +236,108 @@ def test_term_correction_precision_on_synthetic(synth_work, cfg: Config):
     assert not wrong, f"校正後仍與理想文字不符：{wrong}"
 
 
+# --------------------------------------------------------------------------
+# 真實影片黃金集（SDD §5.1 B）
+#
+# 標註檔放在 tests/golden/*.golden.json，影片本身不進版控（§9 版權）。
+# 沒有標註檔時這些測試會 skip 而**不是**假通過——skip 會出現在報告裡。
+# 製作方式見 tests/golden/annotate.py。
+# --------------------------------------------------------------------------
+
+
+def _golden_annotations():
+    from tests.golden.annotate import GoldenAnnotation
+
+    root = Path(__file__).resolve().parent / "golden"
+    out = []
+    for path in sorted(root.glob("*.golden.json")):
+        annotation = GoldenAnnotation.load(path)
+        if annotation.reviewed:
+            out.append(annotation)
+    return out
+
+
+@pytest.mark.golden
+def test_golden_set_has_three_videos():
+    """§5.1（B）：手工標註 **3 支**真實影片（含目標 playlist 的至少 2 支）。"""
+    annotations = _golden_annotations()
+    if not annotations:
+        pytest.skip("尚無經人工確認的黃金集標註（見 tests/golden/annotate.py）")
+    assert len(annotations) >= 3, (
+        f"黃金集只有 {len(annotations)} 支，SDD §5.1（B）要求 3 支。"
+        "§5.5 #8：不得縮小測試集。"
+    )
+
+
+@pytest.mark.golden
+def test_boundary_f1_on_real_videos(cfg: Config):
+    """§5.2：真實影片的換頁偵測 boundary F1 ≥ 0.75。
+
+    參考：文獻中 naive frame diff 約 0.50–0.60，好方法約 0.81+。
+    §5.5 #7：**不得為了讓測試通過而調低此門檻。**
+    """
+    from weft.stages.local import s1b_slides
+    from weft.validation.metrics import boundary_prf
+    from weft.validation.thresholds import BOUNDARY_F1_REAL
+
+    annotations = _golden_annotations()
+    if not annotations:
+        pytest.skip("尚無經人工確認的黃金集標註（見 tests/golden/annotate.py）")
+
+    failures = []
+    for annotation in annotations:
+        work = WorkPaths(cfg.work_dir, annotation.video_id)
+        if not work.video.exists():
+            pytest.skip(f"{annotation.video_id} 的影片不在 work/（請先 weft prepare）")
+        candidates, _slides = s1b_slides(cfg, work)
+        predicted = _internal_boundaries(candidates, annotation.duration)
+        prf = boundary_prf(predicted, annotation.confirmed, BOUNDARY_TOLERANCE_SEC)
+        if prf.f1 < BOUNDARY_F1_REAL:
+            failures.append(f"{annotation.video_id}: {prf}")
+    assert not failures, "\n".join(failures)
+
+
+@pytest.mark.golden
+def test_frame_classification_on_real_videos(cfg: Config):
+    """§5.2：speaker/slide 分類 accuracy ≥ 0.95（真實影片）。"""
+    from weft.stages.local import s1b_slides
+    from weft.validation.metrics import classification_accuracy
+    from weft.validation.thresholds import FRAME_CLASS_ACCURACY
+
+    annotations = [a for a in _golden_annotations() if a.frame_classes]
+    if not annotations:
+        pytest.skip("黃金集尚未標註 frame_classes")
+
+    for annotation in annotations:
+        work = WorkPaths(cfg.work_dir, annotation.video_id)
+        candidates, _ = s1b_slides(cfg, work)
+        by_time = {round(f.t, 1): str(f.frame_class) for f in candidates.frames}
+        pairs = [
+            (by_time[round(float(t), 1)], label)
+            for t, label in annotation.frame_classes.items()
+            if round(float(t), 1) in by_time
+        ]
+        assert pairs, f"{annotation.video_id}：標註的時間點與抽幀對不上"
+        accuracy = classification_accuracy([p for p, _ in pairs], [g for _, g in pairs])
+        assert accuracy >= FRAME_CLASS_ACCURACY, f"{annotation.video_id}: {accuracy:.3f}"
+
+
+@pytest.mark.golden
 @pytest.mark.gpu
 def test_alignment_boundary_error_within_threshold(cfg: Config):
     """§5.2：對齊邊界誤差中位數 ≤ 5 秒（黃金集）。"""
-    pytest.skip("需要真實影片黃金集（SDD §5.1 B），標註工作屬 Phase 1")
+    pytest.skip("需要黃金集標註 + 完整 prepare 產物；標註完成後啟用")
 
 
+@pytest.mark.golden
 @pytest.mark.gpu
 def test_term_correction_precision(cfg: Config):
-    """§5.2：術語校正 precision ≥ 0.90。寧可漏改，不可亂改。"""
-    pytest.skip("需要真實影片黃金集（SDD §5.1 B），標註工作屬 Phase 1")
+    """§5.2：術語校正 precision ≥ 0.90（黃金集）。寧可漏改，不可亂改。
+
+    合成素材版見 `test_term_correction_precision_on_synthetic`——兩者互補：
+    黃金集測真實 Whisper／字幕的錯誤分布，合成版測演算法在已知錯誤下的行為。
+    """
+    pytest.skip("需要黃金集標註逐字稿中的術語錯誤；標註完成後啟用")
 
 
 # --------------------------------------------------------------------------

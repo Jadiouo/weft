@@ -77,6 +77,9 @@ class S2Config(StageConfig):
     ocr_model: str = "PaddleOCR-VL"
     lang: str = "ch"
     use_gpu: bool = False
+    #: PaddleOCR 的 `ch` 模型輸出簡體，但本專案素材是繁體。不轉的話詞庫會
+    #: 混入簡體詞條，而 §4.5 是拿詞庫比對繁體逐字稿——永遠匹配不到。
+    normalise_to_traditional: bool = True
 
 
 class S2bConfig(StageConfig):

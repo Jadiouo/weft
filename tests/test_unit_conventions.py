@@ -140,7 +140,7 @@ def test_threshold_names_appear_only_in_thresholds_module():
     """防止有人在別處重新定義一份「本地門檻」繞過。"""
     import weft.validation.thresholds as T
 
-    names = [n for n in dir(T) if n.isupper()]
+    names = [n for n in dir(T) if n.isupper() and n != "ACCEPTANCE_THRESHOLDS"]
     offenders = []
     for path in python_files(SRC):
         if path.name == "thresholds.py":
@@ -290,3 +290,53 @@ def test_all_sdd_stages_have_entry_points(stage_module, names):
     module = importlib.import_module(stage_module)
     for name in names:
         assert hasattr(module, name), f"{stage_module} 缺少階段 {name}"
+
+
+# --------------------------------------------------------------------------
+# 設定檔與程式預設不得漂移
+# --------------------------------------------------------------------------
+
+
+def test_default_yaml_matches_code_defaults():
+    """`configs/default.yaml` 存在是為了讓可調參數一目了然，不是為了覆寫。
+
+    兩邊漂移的後果很安靜：使用者讀 YAML 以為是這樣，程式實際用另一組值。
+    這條測試把「改了程式預設就得同步 YAML」變成紅燈。
+    """
+    from weft.config import Config
+
+    on_disk = Config.load(REPO / "configs" / "default.yaml")
+    in_code = Config()
+
+    differences = {
+        key: (value, in_code.model_dump()[key])
+        for key, value in on_disk.model_dump().items()
+        if value != in_code.model_dump()[key]
+    }
+    assert not differences, f"configs/default.yaml 與程式預設不一致：{differences}"
+
+
+def test_default_yaml_contains_no_acceptance_thresholds():
+    """§5.5 #7：**驗收門檻**不得經設定檔覆寫。
+
+    範圍限於 `ACCEPTANCE_THRESHOLDS`——`MAX_CHUNK_CHARS`（§4.9 的切分規則）
+    與 `COVERAGE_TOLERANCE_SEC`（§5.3 的容忍值）是處理參數，可以調。
+    """
+    from weft.validation.thresholds import ACCEPTANCE_THRESHOLDS
+
+    body = (REPO / "configs" / "default.yaml").read_text(encoding="utf-8").lower()
+    for name in ACCEPTANCE_THRESHOLDS:
+        assert name.lower() not in body, f"設定檔出現了驗收門檻 {name}"
+
+
+def test_acceptance_threshold_list_is_complete():
+    """新增 §5.2 門檻卻忘了登記到 ACCEPTANCE_THRESHOLDS，護欄就會漏掉它。"""
+    import weft.validation.thresholds as T
+
+    declared = set(T.ACCEPTANCE_THRESHOLDS)
+    processing = {"MAX_CHUNK_CHARS", "COVERAGE_TOLERANCE_SEC", "ACCEPTANCE_THRESHOLDS"}
+    actual = {n for n in dir(T) if n.isupper() and not n.startswith("_")}
+    assert actual - processing == declared, (
+        f"未登記的門檻：{actual - processing - declared}；"
+        f"登記了但不存在：{declared - actual}"
+    )
