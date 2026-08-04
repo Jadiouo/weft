@@ -17,7 +17,7 @@ from tests.synth import scenarios as S
 from tests.synth.build import DURATION_TOLERANCE_SEC, probe_duration
 from tests.synth.truth import SynthTruth
 
-REQUIRED = ("A1", "A2", "A3", "A4", "A5", "A6", "A7")
+REQUIRED = ("A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9")
 
 
 # --------------------------------------------------------------------------
@@ -25,8 +25,12 @@ REQUIRED = ("A1", "A2", "A3", "A4", "A5", "A6", "A7")
 # --------------------------------------------------------------------------
 
 
-def test_all_seven_adversarial_samples_exist():
-    """A1–A7 為必選。移除任何一個，這裡就紅燈。"""
+def test_all_adversarial_samples_exist():
+    """A1–A9 為必選。移除任何一個，這裡就紅燈。
+
+    A8／A9 是 2026-08-04 依真實素材實測結果新增的——A1–A7 無鏡頭運動、
+    無交叉淡化，那正是「合成全綠、真實素材產出垃圾」的直接原因。
+    """
     prefixes = {s.name.split("_")[0] for s in S.ALL_SCENARIOS}
     missing = set(REQUIRED) - prefixes
     assert not missing, f"缺少 SDD §5.1 的對抗樣本：{sorted(missing)}"
@@ -170,6 +174,42 @@ def test_a7_repeated_pages_have_identical_content():
 # --------------------------------------------------------------------------
 # 素材特性（SDD §1.3）
 # --------------------------------------------------------------------------
+
+
+def test_a8_expects_no_page_turns():
+    """A8：攝影機推近不是換頁。純講者背景，全程無投影片。"""
+    assert S.A8.expected_slide_count == 0
+    assert S.A8.slide_boundaries == []
+    assert S.A8.pages[0].zoom is not None
+    start, end = S.A8.pages[0].zoom
+    assert end > start * 1.15, "推近幅度太小，測不出鏡頭運動的影響"
+
+
+def test_a9_has_crossfade_at_every_internal_boundary():
+    """A9：每個內部邊界都有 1 秒交叉淡化。"""
+    windows = S.A9.crossfade_windows
+    assert len(windows) == len(S.A9.slide_boundaries)
+    for a, b in windows:
+        assert b - a == pytest.approx(1.0), "轉場長度應為 1 秒（實測真實素材皆為 1 秒）"
+
+
+def test_a9_crossfade_sits_at_the_page_boundary():
+    """轉場屬於前一頁的尾巴，所以 slide_boundaries 的定義不必改。"""
+    for (_, fade_end), boundary in zip(S.A9.crossfade_windows, S.A9.slide_boundaries):
+        assert fade_end == pytest.approx(boundary)
+
+
+def test_a9_keyframe_windows_exclude_the_crossfade():
+    """A9 的核心：代表幀**不得**落在轉場區間內。
+
+    §4.3 步驟 5 的舊作法「取段末幀」正好會取到它——`slide_017` 即為此例，
+    還一度造成「素材有第三種疊加模式」的誤判（known-risks R8）。
+    """
+    for placed in S.A9.placed:
+        window = placed.crossfade_window
+        if window is None:
+            continue
+        assert window[0] > placed.t_start, "轉場佔滿整頁，代表幀無處可選"
 
 
 def test_slides_include_vertical_text_and_semantic_layout():

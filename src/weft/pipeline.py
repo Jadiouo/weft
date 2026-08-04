@@ -151,6 +151,49 @@ def _slides_from(work: WorkPaths, candidates: CandidateSet) -> list[Slide]:
     return slides
 
 
+def run_survey(target: str, cfg: Config, sample: int = 3) -> int:
+    """S-1 素材勘查。SDD §4.0。**新系列開跑前必跑。**
+
+    只抽樣數支——目的是回答「這個系列能不能用現有設計處理」，不是逐支驗證。
+    不符時回傳非 0 並列出原因，**不自動繼續**。
+    """
+    from .stages.fetch import VideoUnavailable
+    from .stages.survey import survey, write_profile
+
+    out = OutPaths(cfg.out_dir)
+    targets = resolve_targets(target)
+    series_id = next((s for _, s, _ in targets if s), None)
+    picked = [v for v, _, _ in targets[:sample]]
+
+    # 勘查需要影片本身，所以缺的先取得（只取抽樣的那幾支）
+    for video_id in picked:
+        work = WorkPaths(cfg.work_dir, video_id)
+        if work.video.exists():
+            continue
+        work.ensure_dirs()
+        try:
+            from .stages import local
+
+            local.s0_fetch(video_id, cfg, work)
+        except VideoUnavailable as exc:
+            log.warning("%s 不可用，勘查略過：%s", video_id, exc)
+
+    profile = survey(picked, cfg, series_id)
+    path = write_profile(profile, cfg.out_dir)
+    log.info("S-1 profile 寫入 %s", path)
+
+    if profile.ok:
+        log.info("S-1：%d 支抽樣影片與 §1.3 的 profile 相符，可以繼續 prepare。",
+                 len(profile.videos))
+        return 0
+
+    log.error("S-1：**素材與現有設計的假設不符，已中止**（SDD §4.0）")
+    for problem in profile.mismatches:
+        log.error("  - %s", problem)
+    log.error("詳見 %s。若確定要繼續，請先修改 SDD §1.3／§4.3 的設計。", path)
+    return 3
+
+
 def run_prepare(target: str, cfg: Config, force: bool = False) -> int:
     """S0–S3。不受額度限制，可一次跑完整個系列。SDD §6.4。"""
     from .stages.fetch import VideoUnavailable

@@ -87,6 +87,48 @@ def _encode_static(png: Path, duration: float, out: Path, truth: SynthTruth, vf:
     ])
 
 
+def _encode_zoom(png: Path, duration: float, out: Path, truth: SynthTruth,
+                 zoom: tuple[float, float]) -> None:
+    """攝影機緩慢推近（對抗樣本 A8）。
+
+    這是 A1–A7 完全沒有涵蓋的干擾：**整個畫面**相對於背景常態持續位移。
+    真實素材 zIglvjoU9vo 實測有兩次推近（t=199→201、t=554→556），而
+    R8 的實驗證明它是「以畫面變化為基礎的偵測」最根本的混淆源。
+    """
+    frames = max(1, int(round(duration * truth.fps)))
+    start, end = zoom
+    expr = f"{start}+{end - start}*on/{frames}"
+    _run([
+        FFMPEG, "-y", "-loglevel", "error",
+        "-loop", "1", "-framerate", str(truth.fps), "-i", str(png),
+        "-t", f"{duration:.3f}",
+        "-vf", (f"zoompan=z='{expr}':d=1:s={truth.width}x{truth.height}:fps={truth.fps},"
+                f"{_REALISM},format=yuv420p"),
+        *_ENCODE, str(out),
+    ])
+
+
+def _encode_crossfade(before: Path, after: Path, duration: float, out: Path,
+                      truth: SynthTruth) -> None:
+    """交叉淡化轉場（對抗樣本 A9）。
+
+    實測真實素材的轉場長度皆為 1 秒，且**兩側都有**（淡入與淡出）。
+    這一秒的畫面是兩者的混合——OCR 讀不乾淨、VLM 看到的是疊影，所以
+    §4.3 步驟 5 的代表幀選取必須避開它。
+    """
+    _run([
+        FFMPEG, "-y", "-loglevel", "error",
+        "-loop", "1", "-framerate", str(truth.fps), "-i", str(before),
+        "-loop", "1", "-framerate", str(truth.fps), "-i", str(after),
+        "-t", f"{duration:.3f}",
+        "-filter_complex",
+        # 混合比例隨時間由 0 走到 1，形成真正的漸變
+        f"[0:v][1:v]blend=all_expr='A*(1-T/{duration})+B*(T/{duration})',"
+        f"{_REALISM},fps={truth.fps},format=yuv420p",
+        *_ENCODE, str(out),
+    ])
+
+
 def _encode_speaker(png: Path, duration: float, out: Path, truth: SynthTruth) -> None:
     """靜態人像 + 輕微晃動（A3）。以 crop 視窗隨時間平移模擬手持／呼吸晃動。"""
     w, h = truth.width, truth.height
@@ -117,26 +159,43 @@ def _encode_embedded(png: Path, duration: float, out: Path, truth: SynthTruth) -
     ])
 
 
-def _build_page(placed: PlacedPage, truth: SynthTruth, tmp: Path, seq: int) -> list[Path]:
+def _page_image(page, size, tmp: Path, tag: str) -> Path:
+    """該頁的靜態畫面（逐條動畫取最完整的那一版）。"""
+    render = page.render
+    if render.get("kind") == "speaker":
+        big = (int(size[0] * 1.12), int(size[1] * 1.12))
+        return save(render_speaker(big, seed=render.get("seed", 0)), tmp / f"{tag}_spk.png")
+    return save(render_slide(render["layout"], render["content"], size), tmp / f"{tag}_img.png")
+
+
+def _build_page(placed: PlacedPage, truth: SynthTruth, tmp: Path, seq: int,
+                next_page=None) -> list[Path]:
     """把一個 LogicalPage 編成一或多個片段（逐條動畫會是多個）。"""
     size = (truth.width, truth.height)
     render = placed.page.render
     parts: list[Path] = []
 
-    if render.get("kind") == "speaker":
+    # 尾端的交叉淡化自成一個片段，主體時間相應縮短——這樣總長不變，
+    # ground truth 的邊界時刻也不必調整。
+    fade = placed.page.crossfade_out_sec
+    body_duration = placed.page.duration - fade
+
+    if placed.page.zoom is not None:
+        png = _page_image(placed.page, size, tmp, f"p{seq:02d}")
+        out = tmp / f"p{seq:02d}.mp4"
+        _encode_zoom(png, body_duration, out, truth, placed.page.zoom)
+        parts.append(out)
+    elif render.get("kind") == "speaker":
         # 渲染比輸出畫面大一圈，留給 crop 晃動的餘裕
         big = (int(truth.width * 1.12), int(truth.height * 1.12))
         png = save(render_speaker(big, seed=render.get("seed", 0)), tmp / f"p{seq:02d}_speaker.png")
         out = tmp / f"p{seq:02d}.mp4"
-        _encode_speaker(png, placed.page.duration, out, truth)
-        return [out]
-
-    layout, content = render["layout"], render["content"]
-    overlay = render.get("overlay")
-
-    if render.get("progressive"):
+        _encode_speaker(png, body_duration, out, truth)
+        parts.append(out)
+    elif render.get("progressive"):
+        layout, content = render["layout"], render["content"]
         steps = render["steps"]
-        offsets = list(placed.page.build_offsets) + [placed.page.duration]
+        offsets = list(placed.page.build_offsets) + [body_duration]
         for i in range(steps):
             png = save(
                 render_slide(layout, content, size, reveal=i + 1),
@@ -145,17 +204,28 @@ def _build_page(placed: PlacedPage, truth: SynthTruth, tmp: Path, seq: int) -> l
             out = tmp / f"p{seq:02d}_b{i}.mp4"
             _encode_static(png, offsets[i + 1] - offsets[i], out, truth)
             parts.append(out)
-        return parts
-
-    png = save(render_slide(layout, content, size), tmp / f"p{seq:02d}_slide.png")
-    out = tmp / f"p{seq:02d}.mp4"
-    if overlay == "laser":
-        _encode_static(png, placed.page.duration, out, truth, vf=_laser_filter(truth.width, truth.height))
-    elif overlay == "embedded_video":
-        _encode_embedded(png, placed.page.duration, out, truth)
     else:
-        _encode_static(png, placed.page.duration, out, truth)
-    return [out]
+        layout, content = render["layout"], render["content"]
+        overlay = render.get("overlay")
+        png = save(render_slide(layout, content, size), tmp / f"p{seq:02d}_slide.png")
+        out = tmp / f"p{seq:02d}.mp4"
+        if overlay == "laser":
+            _encode_static(png, body_duration, out, truth,
+                           vf=_laser_filter(truth.width, truth.height))
+        elif overlay == "embedded_video":
+            _encode_embedded(png, body_duration, out, truth)
+        else:
+            _encode_static(png, body_duration, out, truth)
+        parts.append(out)
+
+    if fade > 0 and next_page is not None:
+        before = _page_image(placed.page, size, tmp, f"p{seq:02d}_fadea")
+        after = _page_image(next_page, size, tmp, f"p{seq:02d}_fadeb")
+        out = tmp / f"p{seq:02d}_fade.mp4"
+        _encode_crossfade(before, after, fade, out, truth)
+        parts.append(out)
+
+    return parts
 
 
 # --------------------------------------------------------------------------
@@ -211,8 +281,12 @@ def build_scenario(truth: SynthTruth, out_dir: Path, force: bool = False) -> tup
     with tempfile.TemporaryDirectory(prefix=f"synth_{truth.name}_") as td:
         tmp = Path(td)
         parts: list[Path] = []
-        for seq, placed in enumerate(truth.placed):
-            parts.extend(_build_page(placed, truth, tmp, seq))
+        placed_pages = truth.placed
+        for seq, placed in enumerate(placed_pages):
+            following = (
+                placed_pages[seq + 1].page if seq + 1 < len(placed_pages) else None
+            )
+            parts.extend(_build_page(placed, truth, tmp, seq, following))
 
         listing = tmp / "concat.txt"
         listing.write_text("".join(f"file '{p}'\n" for p in parts), encoding="utf-8")

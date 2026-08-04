@@ -38,7 +38,8 @@ pytestmark = pytest.mark.e2e
 @pytest.mark.parametrize(
     "scenario_name",
     ["A1_standard", "A2_progressive", "A3_speaker_only", "A4_laser_pointer",
-     "A5_embedded_video", "A6_interleaved", "A7_backtrack"],
+     "A5_embedded_video", "A6_interleaved", "A7_backtrack",
+     "A8_camera_zoom", "A9_crossfade"],
 )
 def test_slide_detection_meets_synthetic_f1_threshold(synth_work, cfg: Config, scenario_name):
     """§5.2：合成影片的換頁偵測 boundary F1 ≥ 0.95（容忍 ±2 秒）。
@@ -109,10 +110,65 @@ def test_interleaved_speaker_and_slides_are_not_over_segmented(synth_work, cfg: 
 
 
 @pytest.mark.synth
+def test_camera_zoom_does_not_trigger_page_turns(synth_work, cfg: Config):
+    """A8：攝影機緩慢推近，全程純講者。**不得偵測出任何換頁。**
+
+    這是 A1–A7 完全沒有涵蓋的干擾——它們的合成素材無鏡頭運動，而 R8 的
+    實驗證明推近是「以畫面變化為基礎的偵測」最根本的混淆源（真實素材
+    zIglvjoU9vo 的 frame 201、556 各有一次）。
+    """
+    from tests.synth.scenarios import A8
+    from weft.stages.local import s1b_slides
+
+    _candidates, slides = s1b_slides(cfg, WorkPaths(synth_work, A8.name))
+    assert len(slides) <= 2, (
+        f"90 秒的推近畫面被切成 {len(slides)} 段——鏡頭運動觸發了換頁"
+    )
+
+
+@pytest.mark.synth
+def test_crossfade_boundaries_are_correct(synth_work, cfg: Config):
+    """A9：1 秒交叉淡化轉場，段落邊界須在 ±2 秒容忍窗內。"""
+    from tests.synth.scenarios import A9
+    from weft.stages.local import s1b_slides
+    from weft.validation.metrics import boundary_prf
+
+    candidates, _slides = s1b_slides(cfg, WorkPaths(synth_work, A9.name))
+    predicted = _internal_boundaries(candidates, A9.duration)
+    prf = boundary_prf(predicted, A9.slide_boundaries, BOUNDARY_TOLERANCE_SEC)
+    assert prf.f1 >= BOUNDARY_F1_SYNTHETIC, (
+        f"{prf}\n  pred={predicted}\n  gt  ={A9.slide_boundaries}"
+    )
+
+
+@pytest.mark.synth
+def test_keyframe_never_lands_on_a_crossfade_frame(synth_work, cfg: Config):
+    """A9 的核心：代表幀**不得**取到交叉淡化幀。
+
+    §4.3 步驟 5 的舊作法「取段末幀」正好會取到它——轉場幀是兩個畫面的
+    混合，OCR 讀不乾淨、VLM 看到的是疊影。實測 `slide_017` 即為此例，
+    還一度造成「素材有第三種疊加模式」的規格誤判（known-risks R8）。
+    """
+    from tests.synth.scenarios import A9
+    from weft.stages.local import s1b_slides
+
+    candidates, _slides = s1b_slides(cfg, WorkPaths(synth_work, A9.name))
+
+    landed = [
+        (c.index, c.keyframe_t)
+        for c in candidates.candidates
+        for a, b in A9.crossfade_windows
+        if a <= c.keyframe_t <= b
+    ]
+    assert not landed, f"這些代表幀落在交叉淡化區間內：{landed}"
+
+
+@pytest.mark.synth
 @pytest.mark.parametrize(
     "scenario_name",
     ["A1_standard", "A2_progressive", "A3_speaker_only", "A4_laser_pointer",
-     "A5_embedded_video", "A6_interleaved", "A7_backtrack"],
+     "A5_embedded_video", "A6_interleaved", "A7_backtrack",
+     "A8_camera_zoom", "A9_crossfade"],
 )
 def test_local_pipeline_satisfies_all_invariants(synth_work, cfg: Config, scenario_name):
     """S1b→S3 的完整本地管線，跑完後 §5.3 的不變量必須全數通過。

@@ -1,0 +1,63 @@
+{
+  "name": "A9_crossfade",
+  "description": "1 秒交叉淡化轉場進出全螢幕投影片",
+  "expectation": "段落邊界正確（±2 秒內），且 keyframe 不得取到轉場幀",
+  "duration": 160,
+  "fps": 5,
+  "width": 1280,
+  "height": 720,
+  "slide_boundaries": [
+    40.0,
+    85.0,
+    125.0
+  ],
+  "expected_slide_count": 4,
+  "expected_merge_counts": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "pages": [
+    {
+      "index": 0,
+      "label": "p1",
+      "kind": "slide",
+      "t_start": 0.0,
+      "t_end": 40.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 1,
+      "label": "p2",
+      "kind": "slide",
+      "t_start": 40.0,
+      "t_end": 85.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 2,
+      "label": "p3",
+      "kind": "slide",
+      "t_start": 85.0,
+      "t_end": 125.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 3,
+      "label": "p4",
+      "kind": "slide",
+      "t_start": 125.0,
+      "t_end": 160.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    }
+  ]
+}

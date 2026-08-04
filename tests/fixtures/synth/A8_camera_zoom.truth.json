@@ -1,0 +1,24 @@
+{
+  "name": "A8_camera_zoom",
+  "description": "攝影機緩慢推近（純講者背景，全程無投影片）",
+  "expectation": "偵測為 0 頁（鏡頭運動不觸發換頁）",
+  "duration": 90,
+  "fps": 5,
+  "width": 1280,
+  "height": 720,
+  "slide_boundaries": [],
+  "expected_slide_count": 0,
+  "expected_merge_counts": [],
+  "pages": [
+    {
+      "index": 0,
+      "label": "zoom_in",
+      "kind": "speaker",
+      "t_start": 0.0,
+      "t_end": 90.0,
+      "expected_slides": 0,
+      "build_times": [],
+      "keyframe_window": null
+    }
+  ]
+}

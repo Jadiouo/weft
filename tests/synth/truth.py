@@ -37,6 +37,12 @@ class LogicalPage:
     #: 這一頁講者說的話。用來合成字幕軌，讓 S1a→S3 能在合成素材上端到端跑。
     #: 每個元素為 `(文字, 該文字中被注入的 ASR 錯誤 → 正解)`，後者可為 None。
     speech: tuple[tuple[str, tuple[str, str] | None], ...] = ()
+    #: 本頁**最後 N 秒**是與下一頁的交叉淡化（A9）。
+    #: 這麼設計而非讓轉場自成一頁，是為了讓 slide_boundaries 的定義不變——
+    #: 轉場屬於前一頁的尾巴，邊界仍在頁面交界處。
+    crossfade_out_sec: float = 0.0
+    #: 攝影機推近（A8）：`(起始縮放, 結束縮放)`，例如 (1.0, 1.3)。
+    zoom: tuple[float, float] | None = None
 
 
 @dataclass(frozen=True)
@@ -59,6 +65,13 @@ class PlacedPage:
     def keyframe_window(self) -> tuple[float, float] | None:
         w = self.page.keyframe_offset_window
         return None if w is None else (self.t_start + w[0], self.t_start + w[1])
+
+    @property
+    def crossfade_window(self) -> tuple[float, float] | None:
+        """本頁尾端的交叉淡化區間（絕對時間）。代表幀**不得**落在此區間內。"""
+        if self.page.crossfade_out_sec <= 0:
+            return None
+        return (self.t_end - self.page.crossfade_out_sec, self.t_end)
 
     def cues(self) -> list[tuple[float, float, str, tuple[str, str] | None]]:
         """把 speech 平均鋪在本頁的時間區間上。"""
@@ -142,6 +155,11 @@ class SynthTruth:
     @property
     def all_cues(self) -> list[tuple[float, float, str, tuple[str, str] | None]]:
         return [c for p in self.placed for c in p.cues()]
+
+    @property
+    def crossfade_windows(self) -> list[tuple[float, float]]:
+        """全片的交叉淡化區間。A9 的 keyframe 檢查用。"""
+        return [p.crossfade_window for p in self.placed if p.crossfade_window]
 
     @property
     def expected_corrections(self) -> list[tuple[int, str, str]]:

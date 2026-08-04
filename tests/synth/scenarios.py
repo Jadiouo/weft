@@ -230,5 +230,64 @@ A7 = SynthTruth(
     ),
 )
 
-ALL_SCENARIOS: tuple[SynthTruth, ...] = (A1, A2, A3, A4, A5, A6, A7)
+# --------------------------------------------------------------------------
+# A8、A9：2026-08-04 依真實素材實測結果新增（SDD v0.2 §5.1）
+#
+# A1–A7 的合成素材**無鏡頭運動、無交叉淡化**（見 docs/decisions.md D5），
+# 而這兩者正是真實素材上失敗的直接原因——合成全綠、真實素材產出垃圾。
+# --------------------------------------------------------------------------
+
+S_ZOOM = (
+    ("這一段我想先把整體的架構講清楚", None),
+    ("因為後面的細節都建立在這個基礎上", None),
+    ("大家如果聽不懂可以隨時打斷我", None),
+)
+
+A8 = SynthTruth(
+    name="A8_camera_zoom",
+    description="攝影機緩慢推近（純講者背景，全程無投影片）",
+    expectation="偵測為 0 頁（鏡頭運動不觸發換頁）",
+    pages=(
+        LogicalPage(
+            label="zoom_in",
+            kind="speaker",
+            duration=90,
+            expected_slides=0,
+            render={"kind": "speaker", "seed": 21},
+            speech=S_ZOOM,
+            # 90 秒內推近 30%，與真實素材的推近幅度同量級
+            zoom=(1.0, 1.30),
+        ),
+    ),
+)
+
+A9 = SynthTruth(
+    name="A9_crossfade",
+    description="1 秒交叉淡化轉場進出全螢幕投影片",
+    expectation="段落邊界正確（±2 秒內），且 keyframe 不得取到轉場幀",
+    pages=(
+        LogicalPage(
+            label="p1", kind="slide", duration=40, expected_slides=1,
+            render={"layout": "plain", "content": C_OPENING},
+            speech=S_OPENING, crossfade_out_sec=1.0,
+        ),
+        LogicalPage(
+            label="p2", kind="slide", duration=45, expected_slides=1,
+            render={"layout": "vertical", "content": C_VERTICAL},
+            speech=S_VERTICAL, crossfade_out_sec=1.0,
+        ),
+        LogicalPage(
+            label="p3", kind="slide", duration=40, expected_slides=1,
+            render={"layout": "arrow", "content": C_ARROW},
+            speech=S_ARROW, crossfade_out_sec=1.0,
+        ),
+        LogicalPage(
+            label="p4", kind="slide", duration=35, expected_slides=1,
+            render={"layout": "colored", "content": C_COLORED},
+            speech=S_COLORED,
+        ),
+    ),
+)
+
+ALL_SCENARIOS: tuple[SynthTruth, ...] = (A1, A2, A3, A4, A5, A6, A7, A8, A9)
 BY_NAME: dict[str, SynthTruth] = {s.name: s for s in ALL_SCENARIOS}

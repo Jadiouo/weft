@@ -23,6 +23,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--log-level", default=None)
     sub = parser.add_subparsers(dest="command", required=True)
 
+    survey = sub.add_parser(
+        "survey", help="跑 S-1 素材勘查（新系列開跑前必跑，§4.0）")
+    survey.add_argument("target", help="playlist URL / video URL / video_id")
+    survey.add_argument("--sample", type=int, default=3,
+                        help="抽樣幾支影片（預設 3）")
+
     prepare = sub.add_parser("prepare", help="跑 S0–S3（本地，不花額度）")
     prepare.add_argument("target", help="playlist URL / video URL / video_id")
     prepare.add_argument("--force", action="store_true", help="忽略既有 state，全部重跑")
@@ -33,11 +39,19 @@ def _build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("status", help="掃描 work/，列出各影片的階段完成狀態")
 
-    synth = sub.add_parser("synth", help="產生 §5.1 的 A1–A7 合成測試影片")
+    synth = sub.add_parser("synth", help="產生 §5.1 的 A1–A9 合成測試影片")
     synth.add_argument("--out", type=Path, default=Path("tests/fixtures/synth"))
     synth.add_argument("--force", action="store_true")
 
     return parser
+
+
+def cmd_survey(args, cfg: Config) -> int:
+    log = setup_logging(cfg.log_level, OutPaths(cfg.out_dir).root / "weft.log")
+    log.info("survey：%s（抽樣 %d 支）", args.target, args.sample)
+    from .pipeline import run_survey
+
+    return run_survey(args.target, cfg, sample=args.sample)
 
 
 def cmd_prepare(args, cfg: Config) -> int:
@@ -102,6 +116,7 @@ def main(argv: list[str] | None = None) -> int:
         cfg.log_level = args.log_level
 
     return {
+        "survey": cmd_survey,
         "prepare": cmd_prepare,
         "understand": cmd_understand,
         "status": cmd_status,
