@@ -34,6 +34,9 @@ class LogicalPage:
     keyframe_offset_window: tuple[float, float] | None = None
     #: 渲染參數，交給 renderer 解讀（版型、疊加特效等）
     render: dict = field(default_factory=dict)
+    #: 這一頁講者說的話。用來合成字幕軌，讓 S1a→S3 能在合成素材上端到端跑。
+    #: 每個元素為 `(文字, 該文字中被注入的 ASR 錯誤 → 正解)`，後者可為 None。
+    speech: tuple[tuple[str, tuple[str, str] | None], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -56,6 +59,17 @@ class PlacedPage:
     def keyframe_window(self) -> tuple[float, float] | None:
         w = self.page.keyframe_offset_window
         return None if w is None else (self.t_start + w[0], self.t_start + w[1])
+
+    def cues(self) -> list[tuple[float, float, str, tuple[str, str] | None]]:
+        """把 speech 平均鋪在本頁的時間區間上。"""
+        lines = self.page.speech
+        if not lines:
+            return []
+        span = self.page.duration / len(lines)
+        return [
+            (self.t_start + i * span, self.t_start + (i + 1) * span - 0.1, text, error)
+            for i, (text, error) in enumerate(lines)
+        ]
 
 
 @dataclass(frozen=True)
@@ -124,6 +138,19 @@ class SynthTruth:
         step = 1.0 / sample_fps
         n = int(self.duration / step)
         return [self.frame_class_at((i + 0.5) * step) for i in range(n)]
+
+    @property
+    def all_cues(self) -> list[tuple[float, float, str, tuple[str, str] | None]]:
+        return [c for p in self.placed for c in p.cues()]
+
+    @property
+    def expected_corrections(self) -> list[tuple[int, str, str]]:
+        """`(cue_index, 錯字, 正解)`。S2c 的 ground truth（§5.2 precision）。"""
+        return [
+            (i, err[0], err[1])
+            for i, (_, _, _, err) in enumerate(self.all_cues)
+            if err is not None
+        ]
 
     def to_dict(self) -> dict:
         return {

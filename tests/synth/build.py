@@ -163,6 +163,27 @@ def _build_page(placed: PlacedPage, truth: SynthTruth, tmp: Path, seq: int) -> l
 # --------------------------------------------------------------------------
 
 
+def _vtt_time(t: float) -> str:
+    h, rem = divmod(max(0.0, t), 3600)
+    m, sec = divmod(rem, 60)
+    return f"{int(h):02d}:{int(m):02d}:{sec:06.3f}"
+
+
+def write_captions(truth: SynthTruth, path: Path) -> Path:
+    """把場景的 speech 寫成 WebVTT。
+
+    刻意寫成**手動字幕**的形式（一句一個 cue，不逐字滾動）——S1a 的字幕
+    優先序會直接採用它，讓 S1a→S3 能在合成素材上端到端跑，不必動用
+    Whisper（那需要 GPU，而且會讓測試變成分鐘級）。
+    """
+    lines = ["WEBVTT", ""]
+    for t_start, t_end, text, _error in truth.all_cues:
+        lines += [f"{_vtt_time(t_start)} --> {_vtt_time(t_end)}", text, ""]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
 def build_scenario(truth: SynthTruth, out_dir: Path, force: bool = False) -> tuple[Path, Path]:
     """產生 `{name}.mp4` 與 `{name}.truth.json`，回傳兩者路徑。
 
@@ -177,6 +198,9 @@ def build_scenario(truth: SynthTruth, out_dir: Path, force: bool = False) -> tup
     if not force and video.exists() and truth_path.exists():
         try:
             if json.loads(truth_path.read_text(encoding="utf-8")) == expected:
+                captions = out_dir / f"{truth.name}.vtt"
+                if not captions.exists():
+                    write_captions(truth, captions)
                 return video, truth_path
         except json.JSONDecodeError:
             pass
@@ -208,6 +232,7 @@ def build_scenario(truth: SynthTruth, out_dir: Path, force: bool = False) -> tup
         )
 
     truth.save(truth_path)
+    write_captions(truth, out_dir / f"{truth.name}.vtt")
     return video, truth_path
 
 

@@ -9,6 +9,8 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+import numpy as np
+
 from ..config import Config
 from ..ir import CandidateSet, Lexicon, Segment, Slide, Transcript, VideoMeta
 from ..paths import WorkPaths
@@ -23,17 +25,42 @@ def s0_fetch(video_id: str, cfg: Config, work: WorkPaths) -> VideoMeta:
     冪等鍵：video_id
     失敗行為：影片不可用（私人／刪除）→ 記入 skip list，繼續下一支
     """
-    pending(
-        "S0 取得",
-        "§4.1",
-        "Phase 1",
-        [
-            "yt-dlp 下載影片與字幕，字幕優先序：手動 > 自動 > 無",
-            "確認下載的影片不含硬燒字幕（SDD §1.3 已驗證為播放器字幕）",
-            "寫出 00_meta.json / 01_video.mp4 / 01_captions.vtt",
-            "影片不可用時寫入 out/skiplist.json 並繼續，不中斷批次",
-        ],
+    from ..ir import VideoMeta
+    from .fetch import download
+
+    work.ensure_dirs()
+    info = download(video_id, work, cfg)
+
+    langs = cfg.s0.caption_langs
+    manual = info.get("subtitles") or {}
+    auto = info.get("automatic_captions") or {}
+    caption_lang = next(
+        (lang for lang in langs if lang in manual),
+        next((lang for lang in langs if lang in auto), None),
     )
+
+    meta = VideoMeta(
+        video_id=video_id,
+        title=info.get("title") or video_id,
+        duration=float(info.get("duration") or 0.0),
+        url=f"https://www.youtube.com/watch?v={video_id}",
+        upload_date=info.get("upload_date"),
+        has_manual_caption=any(lang in manual for lang in langs),
+        has_auto_caption=any(lang in auto for lang in langs),
+        caption_lang=caption_lang,
+        video_path=str(work.video.relative_to(work.dir)),
+        caption_path=str(work.captions.relative_to(work.dir)) if work.captions.exists() else None,
+    )
+    if meta.duration <= 0:
+        raise RuntimeError(f"{video_id} 的長度為 {meta.duration}——metadata 不可信，中止")
+
+    work.meta.write_text(meta.model_dump_json(indent=2), encoding="utf-8")
+    log.info(
+        "S0 %s：%s（%.0fs，字幕 %s）",
+        video_id, meta.title, meta.duration,
+        f"{caption_lang}{'（手動）' if meta.has_manual_caption else '（自動）'}" if caption_lang else "無",
+    )
+    return meta
 
 
 def s1a_transcript(cfg: Config, work: WorkPaths, lexicon: Lexicon | None = None) -> Transcript:
@@ -42,18 +69,49 @@ def s1a_transcript(cfg: Config, work: WorkPaths, lexicon: Lexicon | None = None)
     冪等鍵：video_id + whisper_model + params_hash
     失敗行為：Whisper OOM → 降 batch size 重試一次 → 仍失敗標記 failed 並繼續
     """
-    pending(
-        "S1a 逐字稿",
-        "§4.2",
-        "Phase 1",
-        [
-            "有手動字幕 → 直接採用，source=manual_caption",
-            "否則 faster-whisper large-v3（language=zh），source=whisper",
-            "有自動字幕且也跑了 Whisper → 自動字幕存為 alt 供交叉檢查",
-            "系列詞庫存在時餵入 initial_prompt（§9 文言文 ASR 的緩解）",
-            "計算並寫入 raw_hash（§5.3 不變量 9 的比對基準）",
-        ],
+    from ..ir import Transcript, TranscriptCue, TranscriptSource, VideoMeta
+    from .transcribe import lexicon_prompt, parse_vtt, whisper_transcribe
+
+    meta = VideoMeta.model_validate_json(work.meta.read_text(encoding="utf-8"))
+    p = cfg.s1a
+
+    def to_cues(rows: list[tuple[float, float, str]]) -> list[TranscriptCue]:
+        return [
+            TranscriptCue(index=i, t_start=a, t_end=max(b, a + 0.01), text_raw=t, text_corrected=t)
+            for i, (a, b, t) in enumerate(rows)
+        ]
+
+    alt_cues = None
+    if meta.has_manual_caption and work.captions.exists():
+        # 策略 1：手動字幕是人打的，品質遠高於任何 ASR
+        rows = parse_vtt(work.captions)
+        source, model = TranscriptSource.MANUAL_CAPTION, None
+        log.info("S1a %s：採用手動字幕，%d 句", work.video_id, len(rows))
+    else:
+        # 策略 2／3：跑 Whisper；若另有自動字幕則一併保留供交叉檢查
+        prompt = lexicon_prompt(lexicon, p.lexicon_prompt_max_terms) if p.use_lexicon_prompt else None
+        rows = whisper_transcribe(work.video, cfg, prompt)
+        source, model = TranscriptSource.WHISPER, p.whisper_model
+        if meta.has_auto_caption and work.captions.exists():
+            alt_cues = to_cues(parse_vtt(work.captions))
+        log.info("S1a %s：Whisper %s，%d 句", work.video_id, p.whisper_model, len(rows))
+
+    if not rows:
+        raise RuntimeError(f"{work.video_id} 產生不出任何逐字稿")
+
+    cues = to_cues(rows)
+    transcript = Transcript(
+        video_id=work.video_id,
+        source=source,
+        language=p.language,
+        cues=cues,
+        raw_hash=Transcript.compute_raw_hash(cues),
+        alt_cues=alt_cues,
+        model=model,
+        params_hash=p.params_hash(),
     )
+    work.transcript.write_text(transcript.model_dump_json(indent=2), encoding="utf-8")
+    return transcript
 
 
 def s1b_slides(cfg: Config, work: WorkPaths) -> tuple[CandidateSet, list[Slide]]:
@@ -159,29 +217,50 @@ def s2_ocr(cfg: Config, work: WorkPaths, slides: list[Slide]) -> list[Slide]:
 
     冪等鍵：slide_set_hash + ocr_model
     """
-    pending(
-        "S2 OCR",
-        "§4.4",
-        "Phase 1",
-        [
-            "PaddleOCR-VL 對 03_slides/*.png 做 OCR，寫出 03_ocr.json",
-            "直排文字的準確度未實測——此處不求完美，精確理解交給 S4 的 VLM",
-        ],
+    import json
+
+    from .ocr import run_ocr
+
+    if not slides:
+        work.ocr.write_text("[]", encoding="utf-8")
+        return slides
+
+    images = [work.dir / s.image_path for s in slides]
+    results = run_ocr(images, cfg.s2)
+
+    for slide, (text, conf) in zip(slides, results):
+        slide.ocr_text = text
+        slide.ocr_confidence = min(1.0, max(0.0, conf))
+
+    work.ocr.write_text(
+        json.dumps(
+            [
+                {"slide_id": s.slide_id, "ocr_text": s.ocr_text, "ocr_confidence": s.ocr_confidence}
+                for s in slides
+            ],
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
     )
+    empty = sum(1 for s in slides if not (s.ocr_text or "").strip())
+    log.info("S2 %s：OCR %d 張，%d 張無文字", work.video_id, len(slides), empty)
+    return slides
 
 
 def s2b_lexicon(cfg: Config, work: WorkPaths, slides: list[Slide], series_id: str | None) -> Lexicon:
     """S2b 術語詞庫。SDD §4.4。scope 為**系列級**，不是單片級。"""
-    pending(
-        "S2b 術語詞庫",
-        "§4.4",
-        "Phase 1",
-        [
-            "從 OCR 文字抽候選術語（2–6 字專有名詞、四字詞、書名號與括號內文字）",
-            "以 series_id 為 scope 累積，新影片的術語 append 進去",
-            "寫出 04_lexicon.json",
-        ],
-    )
+    from ..ir import Lexicon
+    from .lexicon import build_lexicon
+
+    existing = None
+    if work.lexicon.exists():
+        existing = Lexicon.model_validate_json(work.lexicon.read_text(encoding="utf-8"))
+
+    lex = build_lexicon(slides, series_id, cfg.s2b, existing)
+    work.lexicon.write_text(lex.model_dump_json(indent=2), encoding="utf-8")
+    log.info("S2b %s：詞庫 %d 條（scope=%s）", work.video_id, len(lex.entries), series_id or "單片")
+    return lex
 
 
 def s2c_correct(cfg: Config, work: WorkPaths, transcript: Transcript, lexicon: Lexicon) -> Transcript:
@@ -191,18 +270,25 @@ def s2c_correct(cfg: Config, work: WorkPaths, transcript: Transcript, lexicon: L
 
     失敗行為：詞庫為空 → 跳過，transcript_corrected = transcript_raw
     """
-    pending(
-        "S2c 逐字稿術語校正",
-        "§4.5",
-        "Phase 1",
-        [
-            "以拼音／字形相似度比對詞庫（中文 ASR 錯誤多為同音或近音）",
-            "每次替換記錄 {from, to, source, method, score}",
-            "只在時間鄰近的投影片詞庫中比對（±N 個 segment）",
-            "transcript_raw 永不覆寫（§5.3 不變量 9）",
-            "precision 門檻 0.90——寧可漏改，不可亂改",
-        ],
-    )
+    from ..ir import CandidateSet, Slide
+    from .lexicon import correct_transcript
+
+    # 「時間上鄰近的投影片」需要每張投影片的時間區間（§4.5 約束 2）
+    windows: list[tuple[float, float, str]] = []
+    if work.candidates.exists():
+        cand = CandidateSet.model_validate_json(work.candidates.read_text(encoding="utf-8"))
+        windows = [(c.t_start, c.t_end, f"slide_{c.index + 1:03d}") for c in cand.candidates]
+
+    before = transcript.raw_hash
+    transcript, _ = correct_transcript(transcript, lexicon, windows, cfg.s2c)
+
+    # §5.3 不變量 9：transcript_raw 永不被覆寫。這裡就地驗一次，
+    # 而不是等到全片跑完才發現——錯了要能立刻定位到是哪個階段動的。
+    if Transcript.compute_raw_hash(transcript.cues) != before:
+        raise RuntimeError("S2c 改動了 transcript_raw，違反 SDD §4.5 約束 3")
+
+    work.transcript.write_text(transcript.model_dump_json(indent=2), encoding="utf-8")
+    return transcript
 
 
 def s3_align(
@@ -212,15 +298,71 @@ def s3_align(
 
     冪等鍵：transcript_hash + candidates_hash + embedding_model
     """
-    pending(
-        "S3 對齊",
-        "§4.6",
-        "Phase 1",
-        [
-            "以投影片切換時間戳粗切",
-            "每個邊界取前後 ±20 秒的句子，算 embedding 與前後投影片 OCR 的相似度",
-            "把邊界吸附到相似度轉折點，吸附範圍硬限制 ±20 秒",
-            "純講者時段自成 segment，mode=speaker_only",
-            "填入 cue_indices，使每句逐字稿恰好屬於一個 segment（§5.3 不變量 3）",
-        ],
+    from ..ir import BoundaryMethod, Segment, SegmentMode, Slide
+    from .align import Encoder, assign_cues, coarse_windows, snap_boundary
+
+    p = cfg.s3
+    duration = candidates.duration
+    windows = coarse_windows(candidates.candidates, duration, p.min_segment_sec)
+
+    ocr_by_slide: dict[str, str] = {}
+    if work.ocr.exists():
+        import json
+
+        for row in json.loads(work.ocr.read_text(encoding="utf-8")):
+            ocr_by_slide[row["slide_id"]] = row.get("ocr_text") or ""
+
+    # 邊界吸附需要 embedding，而 embedding 需要投影片文字。沒有 OCR 就
+    # 只能停在粗切——這是降級，不是失敗（§4.3 的 transcript_only 同理）。
+    shifts: list[float] = [0.0] * len(windows)
+    method = BoundaryMethod.SLIDE_SWITCH
+    if ocr_by_slide and len(windows) > 1:
+        encoder = Encoder(p.embedding_model, p.device)
+        method = BoundaryMethod.SEMANTIC_SNAP
+        for i in range(1, len(windows)):
+            prev_text = ocr_by_slide.get(windows[i - 1].slide_id or "", "")
+            next_text = ocr_by_slide.get(windows[i].slide_id or "", "")
+            snapped, shift = snap_boundary(
+                windows[i].t_start, transcript.cues, prev_text, next_text,
+                encoder, p.snap_window_sec,
+            )
+            if snapped <= windows[i - 1].t_start or snapped >= windows[i].t_end:
+                continue  # 吸附後會讓區間倒轉，放棄這次吸附
+            windows[i - 1] = type(windows[i - 1])(windows[i - 1].t_start, snapped, windows[i - 1].slide_id)
+            windows[i] = type(windows[i])(snapped, windows[i].t_end, windows[i].slide_id)
+            shifts[i] = shift
+
+    buckets = assign_cues(windows, transcript.cues)
+    by_index = {c.index: c for c in transcript.cues}
+
+    segments: list[Segment] = []
+    for i, (w, cue_indices) in enumerate(zip(windows, buckets)):
+        picked = [by_index[j] for j in cue_indices]
+        if w.slide_id is None:
+            mode = SegmentMode.SPEAKER_ONLY if candidates.candidates else SegmentMode.TRANSCRIPT_ONLY
+        else:
+            mode = SegmentMode.SLIDE
+        segments.append(
+            Segment(
+                segment_id=f"{work.video_id}#{i:03d}",
+                video_id=work.video_id,
+                t_start=w.t_start,
+                t_end=w.t_end,
+                mode=mode,
+                slide_ref=w.slide_id,
+                cue_indices=cue_indices,
+                transcript_raw="".join(c.text_raw for c in picked),
+                transcript_corrected="".join(c.text_corrected or c.text_raw for c in picked),
+                corrections=[c for cue in picked for c in cue.corrections],
+                boundary_method=method if i > 0 else BoundaryMethod.VIDEO_BOUNDS,
+                boundary_shift_sec=shifts[i],
+            )
+        )
+
+    work.segments.write_text(
+        "[" + ",".join(s.model_dump_json() for s in segments) + "]", encoding="utf-8"
     )
+    log.info("S3 %s：%d 個 segment（吸附中位位移 %.1fs）",
+             work.video_id, len(segments),
+             float(np.median([abs(x) for x in shifts])) if shifts else 0.0)
+    return segments

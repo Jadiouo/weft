@@ -114,6 +114,126 @@ def test_speaker_only_video_yields_zero_slides(synth_work, cfg: Config):
     assert slides == []
 
 
+@pytest.mark.synth
+@pytest.mark.parametrize(
+    "scenario_name",
+    ["A1_standard", "A2_progressive", "A3_speaker_only", "A4_laser_pointer",
+     "A5_embedded_video", "A6_interleaved", "A7_backtrack"],
+)
+def test_local_pipeline_satisfies_all_invariants(synth_work, cfg: Config, scenario_name):
+    """S1b→S3 的完整本地管線，跑完後 §5.3 的不變量必須全數通過。
+
+    這比逐條單元測試強得多：單元測試用的是手造資料，這裡用的是**真實
+    管線輸出**——時間戳來自 ffmpeg 抽幀、segment 來自 HMM、cue 指派來自
+    對齊。不變量 1/2/3 的連鎖失敗只有在這種條件下才看得出來。
+
+    OCR 需要 GPU 環境，故此處以無 OCR 的降級路徑執行（§4.5：詞庫為空
+    → S2c 跳過；§4.6：無投影片文字 → 停在粗切）。含 OCR 的完整鏈見
+    `test_local_pipeline_with_ocr`。
+    """
+    from tests.synth.scenarios import BY_NAME
+    from weft.ir import Transcript, VideoIR, VideoMeta
+    from weft.stages import local
+
+    truth = BY_NAME[scenario_name]
+    work = WorkPaths(synth_work, scenario_name)
+
+    candidates, slides = local.s1b_slides(cfg, work)
+    lexicon = local.s2b_lexicon(cfg, work, slides, "PL_synthetic")
+    transcript = local.s1a_transcript(cfg, work, lexicon)
+    transcript = local.s2c_correct(cfg, work, transcript, lexicon)
+    segments = local.s3_align(cfg, work, transcript, candidates)
+
+    ir = VideoIR(
+        meta=VideoMeta.model_validate_json(work.meta.read_text(encoding="utf-8")),
+        slides=slides,
+        segments=segments,
+    )
+    violations = inv.check_all(ir, transcript, work.dir)
+    assert violations == [], "\n".join(str(v) for v in violations)
+
+    # 覆蓋率與 ground truth 一致
+    assert segments[-1].t_end == pytest.approx(truth.duration, abs=1.0)
+
+
+@pytest.mark.synth
+@pytest.mark.gpu
+def test_local_pipeline_with_ocr(synth_work, cfg: Config):
+    """含 OCR 的完整鏈。驗證 §4.5 的術語校正真的在管線中發生。"""
+    from tests.synth.scenarios import A1
+    from weft.stages import local
+    from weft.stages.ocr import OcrUnavailable
+
+    work = WorkPaths(synth_work, A1.name)
+    candidates, slides = local.s1b_slides(cfg, work)
+    try:
+        slides = local.s2_ocr(cfg, work, slides)
+    except OcrUnavailable as exc:
+        pytest.skip(f"OCR 不可用：{exc}")
+
+    assert any((s.ocr_text or "").strip() for s in slides), "OCR 沒有讀出任何文字"
+
+    lexicon = local.s2b_lexicon(cfg, work, slides, "PL_synthetic")
+    assert lexicon.entries, "詞庫為空——S2c 會整段跳過"
+
+    transcript = local.s1a_transcript(cfg, work, lexicon)
+    transcript = local.s2c_correct(cfg, work, transcript, lexicon)
+    segments = local.s3_align(cfg, work, transcript, candidates)
+
+    from weft.ir import VideoIR, VideoMeta
+
+    ir = VideoIR(
+        meta=VideoMeta.model_validate_json(work.meta.read_text(encoding="utf-8")),
+        slides=slides,
+        segments=segments,
+    )
+    violations = inv.check_all(ir, transcript, work.dir)
+    assert violations == [], "\n".join(str(v) for v in violations)
+
+
+@pytest.mark.synth
+@pytest.mark.gpu
+def test_term_correction_precision_on_synthetic(synth_work, cfg: Config):
+    """§5.2：術語校正 precision ≥ 0.90。寧可漏改，不可亂改。
+
+    合成素材版：逐字稿中注入真實中文 ASR 會犯的同音錯（經血/精血、
+    羊神/陽神、形照/形兆、時運/識蘊），正解一定出現在同時段的投影片上。
+    這與 §5.1（B）的真實影片黃金集互補——黃金集測真實 Whisper 的錯誤
+    分布，這裡測演算法在已知錯誤下的行為，成本低且可重現。
+
+    §5.5 #7：**不得為了讓測試通過而調低此門檻。**
+    """
+    from tests.synth.scenarios import A1
+    from weft.stages import local
+    from weft.stages.ocr import OcrUnavailable
+    from weft.validation.metrics import correction_outcome_prf
+    from weft.validation.thresholds import TERM_CORRECTION_PRECISION
+
+    work = WorkPaths(synth_work, A1.name)
+    _candidates, slides = local.s1b_slides(cfg, work)
+    try:
+        slides = local.s2_ocr(cfg, work, slides)
+    except OcrUnavailable as exc:
+        pytest.skip(f"OCR 不可用：{exc}")
+
+    lexicon = local.s2b_lexicon(cfg, work, slides, "PL_synthetic")
+    transcript = local.s1a_transcript(cfg, work, lexicon)
+    transcript = local.s2c_correct(cfg, work, transcript, lexicon)
+
+    ideal = {
+        i: (text.replace(err[0], err[1]) if err else text)
+        for i, (_, _, text, err) in enumerate(A1.all_cues)
+    }
+    corrected = {c.index: (c.text_corrected or c.text_raw) for c in transcript.cues}
+    applied = [(c.index, x.from_text, x.to_text) for c in transcript.cues for x in c.corrections]
+
+    prf = correction_outcome_prf(applied, A1.expected_corrections, ideal, corrected)
+    assert prf.precision >= TERM_CORRECTION_PRECISION, f"{prf}\n  套用：{applied}"
+
+    wrong = {i: (corrected[i], ideal[i]) for i in ideal if corrected[i] != ideal[i]}
+    assert not wrong, f"校正後仍與理想文字不符：{wrong}"
+
+
 @pytest.mark.gpu
 def test_alignment_boundary_error_within_threshold(cfg: Config):
     """§5.2：對齊邊界誤差中位數 ≤ 5 秒（黃金集）。"""
@@ -223,18 +343,12 @@ def test_unimplemented_stages_report_what_is_missing(cfg: Config, tmp_path):
     這條測試把該條件變成可驗證的東西：每個未實作階段都必須說明自己是誰、
     對應 SDD 哪一節、屬哪個 Phase、還缺什麼。
     """
-    from weft.stages import cloud, local
+    from weft.stages import cloud
 
     work = WorkPaths(tmp_path, "dummy")
     # 已實作的階段從這裡移除——清單本身就是進度表。
-    # 已完成：S1b（§4.3，Phase 1）
+    # 已完成：S0–S3（Phase 1，§4.1–§4.6）
     cases = [
-        ("S0", lambda: local.s0_fetch("v", cfg, work), "§4.1"),
-        ("S1a", lambda: local.s1a_transcript(cfg, work), "§4.2"),
-        ("S2", lambda: local.s2_ocr(cfg, work, []), "§4.4"),
-        ("S2b", lambda: local.s2b_lexicon(cfg, work, [], None), "§4.4"),
-        ("S2c", lambda: local.s2c_correct(cfg, work, None, None), "§4.5"),
-        ("S3", lambda: local.s3_align(cfg, work, None, None), "§4.6"),
         ("S4", lambda: cloud.s4_understand(cfg, work, [], None), "§4.7"),
         ("S5", lambda: cloud.s5_synthesize(cfg, work, None), "§4.8"),
         ("S6", lambda: cloud.s6_render(cfg, None, work, OutPaths(tmp_path)), "§4.9"),

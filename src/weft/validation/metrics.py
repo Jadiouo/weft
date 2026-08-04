@@ -121,3 +121,43 @@ def merge_accuracy(predicted_counts: list[int], expected_counts: list[int]) -> f
         raise ValueError("expected_counts 為空")
     hits = sum(1 for p, e in zip(predicted_counts, expected_counts) if p == e)
     return hits / len(expected_counts)
+
+
+def correction_outcome_prf(
+    applied: list[tuple[int, str, str]],
+    expected: list[tuple[int, str, str]],
+    ideal_texts: dict[int, str],
+    corrected_texts: dict[int, str],
+) -> PRF:
+    """以**結果**判定的術語校正 precision／recall。
+
+    為什麼不用 `correction_prf` 的完全相符：校正器可能匹配到比 ground truth
+    更長的詞庫條目。實測案例——注入的錯誤是「形照 → 形兆」，校正器匹配到
+    詞庫中的「形兆胚也」，改成「形照胚也 → 形兆胚也」。**結果文字完全正確**，
+    但 span 不同，完全相符會把它記成 FP 兼 FN，同時低估 precision 與 recall。
+
+    這不是放寬標準：改錯的編輯仍然是 FP。判定改成——
+
+      TP：`to` 出現在理想文字中，且 `from` 不出現在理想文字中（真的修好了）
+      FP：其餘（改到了本來就對的地方，或改成了錯的東西）
+      recall：每個注入的錯誤，最終文字是否已含正解且不含錯字
+    """
+    tp = fp = 0
+    for index, from_text, to_text in applied:
+        ideal = ideal_texts.get(index, "")
+        if to_text in ideal and from_text not in ideal:
+            tp += 1
+        else:
+            fp += 1
+
+    fixed = 0
+    for index, wrong, right in expected:
+        final = corrected_texts.get(index, "")
+        if right in final and wrong not in final:
+            fixed += 1
+    fn = len(expected) - fixed
+
+    precision = tp / (tp + fp) if (tp + fp) else (1.0 if not expected else 0.0)
+    recall = fixed / len(expected) if expected else (1.0 if not applied else 0.0)
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
+    return PRF(precision, recall, f1, tp, fp, fn)

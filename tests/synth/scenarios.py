@@ -78,23 +78,67 @@ C_EMBED = {
 }
 
 
-def _slide(label: str, duration: float, layout: str, content: dict, **render) -> LogicalPage:
+#: 講者說的話。每個元素為 `(文字, 注入的 ASR 錯誤 → 正解)`。
+#: 錯誤全部是**真實中文 ASR 會犯的同音錯**，並且對應的正解一定出現在
+#: 同時段的投影片上——這正是 §4.5 術語校正要處理的情形。
+S_OPENING = (
+    ("今天我們接著看太上老君內觀經的第一段", None),
+    ("經文說天地媾精陰陽布化萬物以生", None),
+    ("這裡講的經血凝聚是父精母血的結合", ("經血", "精血")),
+)
+S_VERTICAL = (
+    ("這一頁是直排的經文原文請大家看右邊", None),
+    ("一月為胞講的是受精卵凝聚成形的階段", None),
+    ("羊神為三魂說的是第三個月的變化", ("羊神", "陽神")),
+)
+S_TWO_COL = (
+    ("左邊是經文右邊是白話解說可以對照著看", None),
+    ("形照胚也的意思是胚體已經初具形狀", ("形照", "形兆")),
+)
+S_ARROW = (
+    ("這張圖用箭頭表示入胎的先後次第", None),
+    ("從父母和合一直到陽神為三魂", None),
+    ("時運進入的時機就在這個階段", ("時運", "識蘊")),
+)
+S_COLORED = (
+    ("這一頁用顏色把四月到九月分開", None),
+    ("每一個月都有它對應的變化", None),
+)
+S_BUILD = (
+    ("我們一條一條看十月懷胎的過程", None),
+    ("先看第一個月然後是第二個月", None),
+    ("接下來三月四月五月六月依序出現", None),
+)
+S_SPEAKER = (
+    ("這邊我先離題講一個題外話", None),
+    ("這跟我們今天的主題其實是相關的", None),
+)
+S_EMBED = (
+    ("下面這段影片是胚胎發育的顯微攝影", None),
+    ("大家可以看到第一週到第四週的變化", None),
+)
+
+
+def _slide(label: str, duration: float, layout: str, content: dict,
+           speech: tuple = (), **render) -> LogicalPage:
     return LogicalPage(
         label=label,
         kind="slide",
         duration=duration,
         expected_slides=1,
         render={"layout": layout, "content": content, **render},
+        speech=speech,
     )
 
 
-def _speaker(label: str, duration: float, seed: int = 0) -> LogicalPage:
+def _speaker(label: str, duration: float, seed: int = 0, speech: tuple = ()) -> LogicalPage:
     return LogicalPage(
         label=label,
         kind="speaker",
         duration=duration,
         expected_slides=0,
         render={"kind": "speaker", "seed": seed},
+        speech=speech or S_SPEAKER,
     )
 
 
@@ -107,11 +151,11 @@ A1 = SynthTruth(
     description="標準整頁換頁，每頁停留 30–120 秒",
     expectation="全部正確偵測",
     pages=(
-        _slide("p1", 30, "plain", C_OPENING),
-        _slide("p2", 60, "vertical", C_VERTICAL),
-        _slide("p3", 45, "two_column", C_TWO_COL),
-        _slide("p4", 120, "arrow", C_ARROW),
-        _slide("p5", 40, "colored", C_COLORED),
+        _slide("p1", 30, "plain", C_OPENING, S_OPENING),
+        _slide("p2", 60, "vertical", C_VERTICAL, S_VERTICAL),
+        _slide("p3", 45, "two_column", C_TWO_COL, S_TWO_COL),
+        _slide("p4", 120, "arrow", C_ARROW, S_ARROW),
+        _slide("p5", 40, "colored", C_COLORED, S_COLORED),
     ),
 )
 
@@ -120,7 +164,7 @@ A2 = SynthTruth(
     description="逐條動畫，一頁分 6 次疊加出現",
     expectation="偵測為 1 頁，取最後一幀",
     pages=(
-        _slide("before", 30, "plain", C_OPENING),
+        _slide("before", 30, "plain", C_OPENING, S_OPENING),
         LogicalPage(
             label="build_page",
             kind="slide",
@@ -129,8 +173,9 @@ A2 = SynthTruth(
             build_offsets=(0, 8, 16, 24, 32, 40),
             keyframe_offset_window=(40, 48),  # 內容最完整的那一段
             render={"layout": "plain", "content": C_BUILD, "progressive": True, "steps": 6},
+            speech=S_BUILD,
         ),
-        _slide("after", 30, "colored", C_COLORED),
+        _slide("after", 30, "colored", C_COLORED, S_COLORED),
     ),
 )
 
@@ -145,7 +190,7 @@ A4 = SynthTruth(
     name="A4_laser_pointer",
     description="移動紅點疊加在靜態投影片上",
     expectation="偵測為 1 頁（紅點不觸發換頁）",
-    pages=(_slide("p1", 90, "two_column", C_TWO_COL, overlay="laser"),),
+    pages=(_slide("p1", 90, "two_column", C_TWO_COL, S_TWO_COL, overlay="laser"),),
 )
 
 A5 = SynthTruth(
@@ -153,9 +198,9 @@ A5 = SynthTruth(
     description="投影片內嵌播放的短影片",
     expectation="不切成數十頁",
     pages=(
-        _slide("p1", 20, "plain", C_OPENING),
-        _slide("p2", 60, "plain", C_EMBED, overlay="embedded_video"),
-        _slide("p3", 20, "colored", C_COLORED),
+        _slide("p1", 20, "plain", C_OPENING, S_OPENING),
+        _slide("p2", 60, "plain", C_EMBED, S_EMBED, overlay="embedded_video"),
+        _slide("p3", 20, "colored", C_COLORED, S_COLORED),
     ),
 )
 
@@ -164,11 +209,11 @@ A6 = SynthTruth(
     description="講者頁與投影片頁交錯出現",
     expectation="分類正確，投影片頁數正確",
     pages=(
-        _slide("s1", 25, "plain", C_OPENING),
+        _slide("s1", 25, "plain", C_OPENING, S_OPENING),
         _speaker("k1", 20, seed=3),
-        _slide("s2", 30, "vertical", C_VERTICAL),
+        _slide("s2", 30, "vertical", C_VERTICAL, S_VERTICAL),
         _speaker("k2", 15, seed=4),
-        _slide("s3", 25, "arrow", C_ARROW),
+        _slide("s3", 25, "arrow", C_ARROW, S_ARROW),
     ),
 )
 
@@ -177,10 +222,11 @@ A7 = SynthTruth(
     description="回放：講者退回前一頁再前進",
     expectation="偵測為 3 次切換（非 2 次）",
     pages=(
-        _slide("p1", 30, "two_column", C_TWO_COL),
-        _slide("p2", 30, "arrow", C_ARROW),
-        _slide("p1_again", 25, "two_column", C_TWO_COL),  # 內容與 p1 相同，仍是獨立段落
-        _slide("p2_again", 30, "arrow", C_ARROW),
+        _slide("p1", 30, "two_column", C_TWO_COL, S_TWO_COL),
+        _slide("p2", 30, "arrow", C_ARROW, S_ARROW),
+        # 內容與 p1 相同，仍是獨立段落
+        _slide("p1_again", 25, "two_column", C_TWO_COL, S_TWO_COL),
+        _slide("p2_again", 30, "arrow", C_ARROW, S_ARROW),
     ),
 )
 
