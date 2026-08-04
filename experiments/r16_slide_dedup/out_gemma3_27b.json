@@ -34,5 +34,24 @@
   "members": [
    "slide_003"
   ]
+ },
+ "slide_004": {
+  "parsed": null,
+  "sec": 772.0,
+  "members": [
+   "slide_004"
+  ]
+ },
+ "slide_005": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "重\n資\n價\n值\n\n重發\n重讀\n重構\n重練\n重解\n重審\n重考\n\n尋回落實\n導向相理\n相應等\n\n只能力控制",
+   "description": "畫面右側為投影片，以書法字體呈現「重資價值」四個大字。下方用較小字體分列多個以“重”開頭的詞語，並在最下方寫有“尋回落實 導向相理 相應等”。講者出現在畫面左側，背景為模糊的山水畫作。"
+  },
+  "sec": 19.0,
+  "members": [
+   "slide_005"
+  ]
  }
 }
