@@ -233,27 +233,44 @@ def _client():
     return genai.Client(api_key=key)
 
 
-def build_prompt(segments, prev_summary: str | None) -> str:
-    """組出一次呼叫的使用者訊息。SDD §4.7 的輸入清單。"""
-    parts: list[str] = []
+def seg_id_of(segments, image_key: str) -> str:
+    """找出用這張圖的區段 id，純粹為了讓日誌指得出是誰。"""
+    return next((s.segment_id for s in segments if s.candidate_ref == image_key), "?")
+
+
+def build_parts(segments, prev_summary: str | None) -> list[tuple[str, str | None]]:
+    """組出一次呼叫的內容序列。SDD §4.7 的輸入清單。
+
+    回傳 `[(文字, 圖的 slide_id 或 None), ...]`。每個 tuple 是**一段文字，
+    後面緊接它自己的那張圖**——`call_gemini` 照這個順序疊 parts。
+
+    **不要改成「文字全部在前、圖片全部在後」。** v0.3 首跑就是那樣寫的
+    （一段文字加一句「圖見附件，依序對應」，然後三張裸圖），實測 49 個區段
+    中 **15 個（30.6%）** 拿到隔壁那張圖的分析結果，而且**每一個錯都落在
+    批次內、沒有一個跨批次邊界**——證明是綁定問題不是模型能力問題。
+    見 `experiments/r14_image_binding/REPORT.md` 與 docs/decisions.md D20。
+    """
+    parts: list[tuple[str, str | None]] = []
     if prev_summary:
-        parts.append(f"## 前一段的摘要（僅供銜接，不要重複其內容）\n{prev_summary}\n")
+        parts.append((f"## 前一段的摘要（僅供銜接，不要重複其內容）\n{prev_summary}", None))
 
     for seg in segments:
         header = f"## segment {seg.segment_id}（{seg.t_start:.1f}s – {seg.t_end:.1f}s）"
-        if seg.candidate_ref:
-            header += f"\n代表畫面：{seg.candidate_ref}（圖見附件，依序對應）"
+        image_key = seg.candidate_ref or None
+        if image_key:
+            header += f"\n**下面緊接的那一張圖**就是這一段的代表畫面（{image_key}）。"
         else:
             header += "\n此段沒有代表畫面（純逐字稿）。"
 
         transcript = (seg.transcript_corrected or seg.transcript_raw).strip()
         header += f"\n\n逐字稿：\n{transcript or '（此段無逐字稿）'}"
-        parts.append(header)
+        parts.append((header, image_key))
 
     parts.append(
-        "\n請為上述每一個 segment 各輸出一組結果，`segment_id` 必須與上面完全一致。"
+        ("\n請為上述每一個 segment 各輸出一組結果，`segment_id` 必須與上面完全一致。"
+         "每一段只能依據**緊接在它標頭後面**的那張圖作答，不要參考其他段的圖。", None)
     )
-    return "\n\n".join(parts)
+    return parts
 
 def call_gemini(
     segments,
@@ -270,14 +287,25 @@ def call_gemini(
     from google.genai import types
 
     client = _client()
-    contents: list = [build_prompt(segments, prev_summary)]
 
-    for seg in segments:
-        path = image_paths.get(seg.candidate_ref or "")
+    # 文字與圖**交錯**：每張圖緊接在它自己的區段標頭之後。
+    # 首跑用「文字全在前、圖全在後」，30.6% 的區段拿到隔壁的圖（D20）。
+    contents: list = []
+    for text, image_key in build_parts(segments, prev_summary):
+        contents.append(text)
+        if image_key is None:
+            continue
+        path = image_paths.get(image_key)
         if path and path.exists():
             contents.append(
                 types.Part.from_bytes(data=path.read_bytes(), mime_type="image/png")
             )
+        else:
+            # 圖不見了就明說，**不要靜靜跳過**——靜靜跳過會讓後面的圖遞補
+            # 上來，整批的對應全部位移。
+            log.warning("%s：代表畫面 %s 不存在，改以純逐字稿處理",
+                        seg_id_of(segments, image_key), image_key)
+            contents.append("（這一段的代表畫面檔案遺失，請當作沒有畫面處理。）")
 
     response = client.models.generate_content(
         model=cfg.model,
