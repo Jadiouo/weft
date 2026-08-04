@@ -1,0 +1,153 @@
+{
+  "video_id": "zIglvjoU9vo",
+  "title": "古典醫學之人體設計系列-1生命之初 胎體成長（一）",
+  "url": "https://www.youtube.com/watch?v=zIglvjoU9vo",
+  "duration": 2520.0,
+  "annotator": "Claude（視覺判讀，見 method）",
+  "annotated_on": "2026-08-04",
+  "reviewed": false,
+  "frame_convention": "frame index i ↔ t = i + 0.5 秒；檔名為 f_{i+1:05d}.png",
+  "method": [
+    "1. 由方向 1（背景距離 + Otsu）分出攝影棚幀 2053 個 / 全螢幕投影片幀 466 個",
+    "2. 幀間差異把攝影棚幀切成 52 個區段，逐段判讀代表幀",
+    "3. 殘差訊號反查長區段內部的離群幀，逐一以逐秒 strip 視覺確認",
+    "4. 把**所有**與全螢幕邊界相距 ≤2 幀的攝影棚幀（72 個）全部畫出來逐一判讀",
+    "步驟 3 與 4 都推翻了步驟 2 的初步標註，見 corrections"
+  ],
+  "label_meaning": {
+    "crossfade": "交叉淡化轉場：攝影棚畫面與全螢幕投影片的混合幀",
+    "speaker": "純講者：固定攝影棚機位，無任何投影片內容混入",
+    "fullscreen": "全螢幕投影片（由方向 1 分出，不在本標註範圍）"
+  },
+  "finding": "known-risks R8 稱之為「半透明疊加」的畫面，經逐秒檢視確認為**交叉淡化轉場幀**，長度皆為 1 秒且全部位於全螢幕投影片段落的邊界。全片未發現任何持續性的疊加模式。",
+  "corrections": [
+    "初判把 496、1266、2114 標為疊加，逐一放大後確認為乾淨的攝影棚畫面（混合已完成），改標 speaker",
+    "初判漏掉 765 與 945——它們是**進入**全螢幕投影片的轉場幀，被併進前一個長區段的末端，區段中點判讀看不到",
+    "初判把 run 9 的 712–719 視為漸進淡入，逐秒檢視後確認為**講者的大動作**（前傾、手部動作），與轉場無關",
+    "步驟 4 用殘差反查後補標 2483——它是**進入**全螢幕的轉場，同樣被併在長區段末端，中點判讀看不到",
+    "查出 201 與 556 是**攝影機變焦**造成的高殘差，不是轉場。556 的殘差 ink 15513 高於最弱的真實轉場之外的所有幀，是 H1 的主要反例"
+  ],
+  "crossfade_frames": [
+    {
+      "index": 645,
+      "t": 645.5,
+      "edge": "out",
+      "adjacent_fullscreen": [
+        638,
+        644
+      ],
+      "blend": "中"
+    },
+    {
+      "index": 727,
+      "t": 727.5,
+      "edge": "out",
+      "adjacent_fullscreen": [
+        720,
+        726
+      ],
+      "blend": "中"
+    },
+    {
+      "index": 765,
+      "t": 765.5,
+      "edge": "in",
+      "adjacent_fullscreen": [
+        766,
+        777
+      ],
+      "blend": "強"
+    },
+    {
+      "index": 778,
+      "t": 778.5,
+      "edge": "out",
+      "adjacent_fullscreen": [
+        766,
+        777
+      ],
+      "blend": "強"
+    },
+    {
+      "index": 945,
+      "t": 945.5,
+      "edge": "in",
+      "adjacent_fullscreen": [
+        946,
+        954
+      ],
+      "blend": "強"
+    },
+    {
+      "index": 1148,
+      "t": 1148.5,
+      "edge": "out",
+      "adjacent_fullscreen": [
+        1142,
+        1147
+      ],
+      "blend": "強"
+    },
+    {
+      "index": 1449,
+      "t": 1449.5,
+      "edge": "out",
+      "adjacent_fullscreen": [
+        1431,
+        1448
+      ],
+      "blend": "強"
+    },
+    {
+      "index": 1492,
+      "t": 1492.5,
+      "edge": "out",
+      "adjacent_fullscreen": [
+        1459,
+        1491
+      ],
+      "blend": "中（比喻註解文字）"
+    },
+    {
+      "index": 2136,
+      "t": 2136.5,
+      "edge": "out",
+      "adjacent_fullscreen": [
+        2126,
+        2135
+      ],
+      "blend": "中（胚胎圖）"
+    },
+    {
+      "index": 2483,
+      "t": 2483.5,
+      "edge": "in",
+      "adjacent_fullscreen": [
+        2484,
+        2490
+      ],
+      "blend": "中（步驟 4 由殘差反查後補標）"
+    }
+  ],
+  "speaker_definition": "**所有非轉場的攝影棚幀**（2053 − 10 = 2043）。初版用「距全螢幕邊界 ≥5 幀」定義，會把攝影機變焦的 556 排除在外而美化結果——那是定義造成的假分離，已改正。",
+  "speaker_frame_count": 2043,
+  "boundary_adjacent_count": 72,
+  "boundary_adjacent_without_visible_blend": 63,
+  "known_limitations": [
+    "reviewed 為 false：這份標註出自 AI 視覺判讀，尚未經人工複核。",
+    "「弱混合」與「乾淨」之間沒有客觀分界。496、1266、2114 判為乾淨是主觀的；若把它們算進 crossfade，該組的最小 ink 會更低，H1 的結論只會更差不會更好。",
+    "只有這一支影片。同系列其他影片的轉場風格可能不同。"
+  ],
+  "camera_zoom_frames": [
+    {
+      "index": 201,
+      "t": 201.5,
+      "note": "相對 199 明顯推近，純講者，殘差 ink 9096"
+    },
+    {
+      "index": 556,
+      "t": 556.5,
+      "note": "554→556 逐步推近，純講者，殘差 ink 15513。與全螢幕 557 之間是硬切，無轉場"
+    }
+  ]
+}

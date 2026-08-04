@@ -1,0 +1,474 @@
+{
+  "transition_percentile": 97.0,
+  "min_run_sec": 4,
+  "runs": [
+    {
+      "index": 0,
+      "frame_start": 183,
+      "frame_end": 188,
+      "t_start": 183.0,
+      "t_end": 189.0,
+      "representative": 185,
+      "label": "unlabelled"
+    },
+    {
+      "index": 1,
+      "frame_start": 189,
+      "frame_end": 396,
+      "t_start": 189.0,
+      "t_end": 397.0,
+      "representative": 292,
+      "label": "unlabelled"
+    },
+    {
+      "index": 2,
+      "frame_start": 397,
+      "frame_end": 465,
+      "t_start": 397.0,
+      "t_end": 466.0,
+      "representative": 431,
+      "label": "unlabelled"
+    },
+    {
+      "index": 3,
+      "frame_start": 466,
+      "frame_end": 484,
+      "t_start": 466.0,
+      "t_end": 485.0,
+      "representative": 475,
+      "label": "unlabelled"
+    },
+    {
+      "index": 4,
+      "frame_start": 496,
+      "frame_end": 496,
+      "t_start": 496.0,
+      "t_end": 497.0,
+      "representative": 496,
+      "label": "unlabelled"
+    },
+    {
+      "index": 5,
+      "frame_start": 497,
+      "frame_end": 556,
+      "t_start": 497.0,
+      "t_end": 557.0,
+      "representative": 526,
+      "label": "unlabelled"
+    },
+    {
+      "index": 6,
+      "frame_start": 563,
+      "frame_end": 637,
+      "t_start": 563.0,
+      "t_end": 638.0,
+      "representative": 600,
+      "label": "unlabelled"
+    },
+    {
+      "index": 7,
+      "frame_start": 645,
+      "frame_end": 645,
+      "t_start": 645.0,
+      "t_end": 646.0,
+      "representative": 645,
+      "label": "unlabelled"
+    },
+    {
+      "index": 8,
+      "frame_start": 646,
+      "frame_end": 652,
+      "t_start": 646.0,
+      "t_end": 653.0,
+      "representative": 649,
+      "label": "unlabelled"
+    },
+    {
+      "index": 9,
+      "frame_start": 653,
+      "frame_end": 719,
+      "t_start": 653.0,
+      "t_end": 720.0,
+      "representative": 686,
+      "label": "unlabelled"
+    },
+    {
+      "index": 10,
+      "frame_start": 727,
+      "frame_end": 727,
+      "t_start": 727.0,
+      "t_end": 728.0,
+      "representative": 727,
+      "label": "unlabelled"
+    },
+    {
+      "index": 11,
+      "frame_start": 728,
+      "frame_end": 765,
+      "t_start": 728.0,
+      "t_end": 766.0,
+      "representative": 746,
+      "label": "unlabelled"
+    },
+    {
+      "index": 12,
+      "frame_start": 778,
+      "frame_end": 778,
+      "t_start": 778.0,
+      "t_end": 779.0,
+      "representative": 778,
+      "label": "unlabelled"
+    },
+    {
+      "index": 13,
+      "frame_start": 779,
+      "frame_end": 810,
+      "t_start": 779.0,
+      "t_end": 811.0,
+      "representative": 794,
+      "label": "unlabelled"
+    },
+    {
+      "index": 14,
+      "frame_start": 811,
+      "frame_end": 842,
+      "t_start": 811.0,
+      "t_end": 843.0,
+      "representative": 826,
+      "label": "unlabelled"
+    },
+    {
+      "index": 15,
+      "frame_start": 843,
+      "frame_end": 945,
+      "t_start": 843.0,
+      "t_end": 946.0,
+      "representative": 894,
+      "label": "unlabelled"
+    },
+    {
+      "index": 16,
+      "frame_start": 955,
+      "frame_end": 995,
+      "t_start": 955.0,
+      "t_end": 996.0,
+      "representative": 975,
+      "label": "unlabelled"
+    },
+    {
+      "index": 17,
+      "frame_start": 1011,
+      "frame_end": 1052,
+      "t_start": 1011.0,
+      "t_end": 1053.0,
+      "representative": 1031,
+      "label": "unlabelled"
+    },
+    {
+      "index": 18,
+      "frame_start": 1053,
+      "frame_end": 1064,
+      "t_start": 1053.0,
+      "t_end": 1065.0,
+      "representative": 1058,
+      "label": "unlabelled"
+    },
+    {
+      "index": 19,
+      "frame_start": 1065,
+      "frame_end": 1089,
+      "t_start": 1065.0,
+      "t_end": 1090.0,
+      "representative": 1077,
+      "label": "unlabelled"
+    },
+    {
+      "index": 20,
+      "frame_start": 1090,
+      "frame_end": 1141,
+      "t_start": 1090.0,
+      "t_end": 1142.0,
+      "representative": 1115,
+      "label": "unlabelled"
+    },
+    {
+      "index": 21,
+      "frame_start": 1148,
+      "frame_end": 1148,
+      "t_start": 1148.0,
+      "t_end": 1149.0,
+      "representative": 1148,
+      "label": "unlabelled"
+    },
+    {
+      "index": 22,
+      "frame_start": 1149,
+      "frame_end": 1181,
+      "t_start": 1149.0,
+      "t_end": 1182.0,
+      "representative": 1165,
+      "label": "unlabelled"
+    },
+    {
+      "index": 23,
+      "frame_start": 1182,
+      "frame_end": 1251,
+      "t_start": 1182.0,
+      "t_end": 1252.0,
+      "representative": 1216,
+      "label": "unlabelled"
+    },
+    {
+      "index": 24,
+      "frame_start": 1266,
+      "frame_end": 1267,
+      "t_start": 1266.0,
+      "t_end": 1268.0,
+      "representative": 1266,
+      "label": "unlabelled"
+    },
+    {
+      "index": 25,
+      "frame_start": 1268,
+      "frame_end": 1280,
+      "t_start": 1268.0,
+      "t_end": 1281.0,
+      "representative": 1274,
+      "label": "unlabelled"
+    },
+    {
+      "index": 26,
+      "frame_start": 1281,
+      "frame_end": 1286,
+      "t_start": 1281.0,
+      "t_end": 1287.0,
+      "representative": 1283,
+      "label": "unlabelled"
+    },
+    {
+      "index": 27,
+      "frame_start": 1287,
+      "frame_end": 1373,
+      "t_start": 1287.0,
+      "t_end": 1374.0,
+      "representative": 1330,
+      "label": "unlabelled"
+    },
+    {
+      "index": 28,
+      "frame_start": 1374,
+      "frame_end": 1430,
+      "t_start": 1374.0,
+      "t_end": 1431.0,
+      "representative": 1402,
+      "label": "unlabelled"
+    },
+    {
+      "index": 29,
+      "frame_start": 1449,
+      "frame_end": 1449,
+      "t_start": 1449.0,
+      "t_end": 1450.0,
+      "representative": 1449,
+      "label": "unlabelled"
+    },
+    {
+      "index": 30,
+      "frame_start": 1450,
+      "frame_end": 1458,
+      "t_start": 1450.0,
+      "t_end": 1459.0,
+      "representative": 1454,
+      "label": "unlabelled"
+    },
+    {
+      "index": 31,
+      "frame_start": 1492,
+      "frame_end": 1492,
+      "t_start": 1492.0,
+      "t_end": 1493.0,
+      "representative": 1492,
+      "label": "unlabelled"
+    },
+    {
+      "index": 32,
+      "frame_start": 1493,
+      "frame_end": 1528,
+      "t_start": 1493.0,
+      "t_end": 1529.0,
+      "representative": 1510,
+      "label": "unlabelled"
+    },
+    {
+      "index": 33,
+      "frame_start": 1555,
+      "frame_end": 1671,
+      "t_start": 1555.0,
+      "t_end": 1672.0,
+      "representative": 1613,
+      "label": "unlabelled"
+    },
+    {
+      "index": 34,
+      "frame_start": 1672,
+      "frame_end": 1748,
+      "t_start": 1672.0,
+      "t_end": 1749.0,
+      "representative": 1710,
+      "label": "unlabelled"
+    },
+    {
+      "index": 35,
+      "frame_start": 1749,
+      "frame_end": 1816,
+      "t_start": 1749.0,
+      "t_end": 1817.0,
+      "representative": 1782,
+      "label": "unlabelled"
+    },
+    {
+      "index": 36,
+      "frame_start": 1817,
+      "frame_end": 1862,
+      "t_start": 1817.0,
+      "t_end": 1863.0,
+      "representative": 1839,
+      "label": "unlabelled"
+    },
+    {
+      "index": 37,
+      "frame_start": 1863,
+      "frame_end": 1866,
+      "t_start": 1863.0,
+      "t_end": 1867.0,
+      "representative": 1864,
+      "label": "unlabelled"
+    },
+    {
+      "index": 38,
+      "frame_start": 1886,
+      "frame_end": 1895,
+      "t_start": 1886.0,
+      "t_end": 1896.0,
+      "representative": 1890,
+      "label": "unlabelled"
+    },
+    {
+      "index": 39,
+      "frame_start": 1896,
+      "frame_end": 2052,
+      "t_start": 1896.0,
+      "t_end": 2053.0,
+      "representative": 1974,
+      "label": "unlabelled"
+    },
+    {
+      "index": 40,
+      "frame_start": 2114,
+      "frame_end": 2114,
+      "t_start": 2114.0,
+      "t_end": 2115.0,
+      "representative": 2114,
+      "label": "unlabelled"
+    },
+    {
+      "index": 41,
+      "frame_start": 2115,
+      "frame_end": 2125,
+      "t_start": 2115.0,
+      "t_end": 2126.0,
+      "representative": 2120,
+      "label": "unlabelled"
+    },
+    {
+      "index": 42,
+      "frame_start": 2136,
+      "frame_end": 2136,
+      "t_start": 2136.0,
+      "t_end": 2137.0,
+      "representative": 2136,
+      "label": "unlabelled"
+    },
+    {
+      "index": 43,
+      "frame_start": 2137,
+      "frame_end": 2169,
+      "t_start": 2137.0,
+      "t_end": 2170.0,
+      "representative": 2153,
+      "label": "unlabelled"
+    },
+    {
+      "index": 44,
+      "frame_start": 2177,
+      "frame_end": 2209,
+      "t_start": 2177.0,
+      "t_end": 2210.0,
+      "representative": 2193,
+      "label": "unlabelled"
+    },
+    {
+      "index": 45,
+      "frame_start": 2210,
+      "frame_end": 2239,
+      "t_start": 2210.0,
+      "t_end": 2240.0,
+      "representative": 2224,
+      "label": "unlabelled"
+    },
+    {
+      "index": 46,
+      "frame_start": 2240,
+      "frame_end": 2331,
+      "t_start": 2240.0,
+      "t_end": 2332.0,
+      "representative": 2285,
+      "label": "unlabelled"
+    },
+    {
+      "index": 47,
+      "frame_start": 2332,
+      "frame_end": 2359,
+      "t_start": 2332.0,
+      "t_end": 2360.0,
+      "representative": 2345,
+      "label": "unlabelled"
+    },
+    {
+      "index": 48,
+      "frame_start": 2360,
+      "frame_end": 2363,
+      "t_start": 2360.0,
+      "t_end": 2364.0,
+      "representative": 2361,
+      "label": "unlabelled"
+    },
+    {
+      "index": 49,
+      "frame_start": 2364,
+      "frame_end": 2393,
+      "t_start": 2364.0,
+      "t_end": 2394.0,
+      "representative": 2378,
+      "label": "unlabelled"
+    },
+    {
+      "index": 50,
+      "frame_start": 2394,
+      "frame_end": 2483,
+      "t_start": 2394.0,
+      "t_end": 2484.0,
+      "representative": 2438,
+      "label": "unlabelled"
+    },
+    {
+      "index": 51,
+      "frame_start": 2491,
+      "frame_end": 2503,
+      "t_start": 2491.0,
+      "t_end": 2504.0,
+      "representative": 2497,
+      "label": "unlabelled"
+    }
+  ]
+}

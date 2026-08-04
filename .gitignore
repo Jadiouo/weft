@@ -14,3 +14,9 @@ tests/fixtures/synth/*.mp4
 # 真實影片黃金集：素材為他人著作（SDD §9 版權），只版控標註檔
 tests/fixtures/golden/*.mp4
 tests/fixtures/golden/*.webm
+
+# R8 實驗的中間產物（可由 step1–5 重跑產生）
+experiments/r8_overlay/sheets/
+experiments/r8_overlay/runs/
+experiments/r8_overlay/residual.json
+experiments/r8_overlay/split.json
