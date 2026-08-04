@@ -266,3 +266,72 @@ def test_debug_markdown_notes_progressive_merge(legal_ir, tmp_path):
     ir, _, base = legal_ir
     body = write_debug_markdown(ir, base, tmp_path / "d.md").read_text(encoding="utf-8")
     assert "逐條動畫" in body
+
+
+# --------------------------------------------------------------------------
+# v0.3 首跑發現的溯源漏洞
+# --------------------------------------------------------------------------
+
+
+def test_blocks_citing_an_empty_transcript_are_dropped():
+    """逐字稿為空時，`transcript` 來源的 block 無法溯源，應在 S4 就丟棄。
+
+    實測（v0.3 首跑）：片頭 0–50 秒有 12 個 segment 沒有任何字幕。VLM 正確
+    判定 `is_slide=false`，卻仍描述畫面上的字並標成 transcript 來源——因為
+    prompt 只留了這一個選項給它。9 個這樣的 block 全部溯源失敗，佔未通過
+    總數的四分之一。
+
+    這是**設計漏洞不是幻覺**：既沒投影片又沒逐字稿的段落，本來就不該有
+    任何 content_block。
+    """
+    from weft.config import S4Config
+    from weft.ir import BoundaryMethod, Segment, SegmentMode
+    from weft.stages.understand import to_understanding
+
+    segment = Segment(
+        segment_id="v#000", video_id="v", t_start=0.0, t_end=2.0,
+        mode=SegmentMode.SPEAKER_ONLY, boundary_method=BoundaryMethod.VIDEO_BOUNDS,
+        transcript_raw="", transcript_corrected="",
+    )
+    raw = {
+        "segment_id": "v#000",
+        "is_slide": False,
+        "reject_reason": "片頭動畫",
+        "slide_text": "",
+        "corrections": [],
+        "summary": "影片片頭",
+        "content_blocks": [{
+            "type": "口頭延伸",
+            "text": "影片開始的片頭動畫。",
+            "provenance_kind": "transcript",
+            "provenance_ref": "0.0-2.0",
+        }],
+        "terms": [],
+    }
+    understanding = to_understanding(raw, segment, S4Config())
+    assert understanding.content_blocks == [], "來源為空的 block 應被丟棄"
+    assert understanding.is_slide is False
+    assert understanding.reject_reason == "片頭動畫"
+
+
+def test_blocks_with_a_real_transcript_are_kept():
+    """有逐字稿時當然要保留——上一條不能誤殺正常情形。"""
+    from weft.config import S4Config
+    from weft.ir import BoundaryMethod, Segment, SegmentMode
+    from weft.stages.understand import to_understanding
+
+    segment = Segment(
+        segment_id="v#001", video_id="v", t_start=2.0, t_end=20.0,
+        mode=SegmentMode.SPEAKER_ONLY, boundary_method=BoundaryMethod.SLIDE_SWITCH,
+        transcript_raw="講者用簽約來比喻識蘊進入的時機。",
+        transcript_corrected="講者用簽約來比喻識蘊進入的時機。",
+    )
+    raw = {
+        "segment_id": "v#001", "is_slide": False, "slide_text": "",
+        "corrections": [], "summary": "比喻", "terms": [],
+        "content_blocks": [{
+            "type": "口頭延伸", "text": "講者以簽約作比喻。",
+            "provenance_kind": "transcript", "provenance_ref": "2.0-20.0",
+        }],
+    }
+    assert len(to_understanding(raw, segment, S4Config()).content_blocks) == 1

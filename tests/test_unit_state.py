@@ -285,3 +285,40 @@ def test_sync_state_is_idempotent(tmp_path):
 
     assert first
     assert second == set(), "第二次同步不該再作廢任何東西"
+
+
+def test_load_tolerates_stages_removed_by_a_pipeline_revision(tmp_path):
+    """管線改版後，舊的 state.json 會留著已不存在的階段名。
+
+    直接 validate 會讓使用者**整個 work/ 目錄無法載入**——等於強迫他重跑
+    幾十支影片的抽幀。v0.3 移除 S2／S2b／S2c 時真的踩到這個。
+    """
+    import json
+
+    path = tmp_path / "state.json"
+    path.write_text(json.dumps({
+        "video_id": "v",
+        "stages": {
+            "S0": {"status": "done", "params_hash": "h"},
+            "S2": {"status": "done", "params_hash": "h"},      # v0.3 已移除
+            "S2b": {"status": "done", "params_hash": "h"},     # 同上
+            "S3": {"status": "done", "params_hash": "h"},
+        },
+        "understood_segments": [],
+    }), encoding="utf-8")
+
+    state = VideoState.load(path)
+    assert state.is_satisfied(Stage.S0_FETCH, "h")
+    assert state.is_satisfied(Stage.S3_ALIGN, "h")
+    assert len(state.stages) == 2, "已移除的階段應被丟棄，不該留在 state 中"
+
+
+def test_load_still_rejects_genuinely_malformed_state(tmp_path):
+    """容忍已移除的階段，不等於容忍任何壞資料。"""
+    from pydantic import ValidationError
+
+    path = tmp_path / "state.json"
+    path.write_text('{"video_id": "v", "stages": {"S0": {"status": "不是合法狀態"}}}',
+                    encoding="utf-8")
+    with pytest.raises(ValidationError):
+        VideoState.load(path)

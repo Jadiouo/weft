@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
@@ -133,9 +134,28 @@ class VideoState(BaseModel):
 
     @classmethod
     def load(cls, path: Path) -> VideoState:
+        """讀取 state.json，**容忍已移除的階段**。
+
+        管線改版時（例如 v0.3 移除 S2／S2b／S2c）舊的 state.json 會留著
+        已不存在的階段名。直接 validate 會拋 ValidationError，使用者的
+        整個 work/ 目錄變成無法載入——那等於強迫他重跑幾十支影片的抽幀。
+
+        未知階段**丟棄並記錄**：它們的產物本來就不再被任何階段讀取，
+        留著只會讓 sync_state 拿它去比對不存在的參數 hash。
+        """
         if not path.exists():
             raise FileNotFoundError(path)
-        return cls.model_validate_json(path.read_text(encoding="utf-8"))
+
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        known = {s.value for s in Stage}
+        unknown = [k for k in (raw.get("stages") or {}) if k not in known]
+        if unknown:
+            for key in unknown:
+                raw["stages"].pop(key)
+            logging.getLogger(__name__).info(
+                "%s：忽略已移除的階段 %s（管線改版後的遺留）", path.name, unknown
+            )
+        return cls.model_validate(raw)
 
     @classmethod
     def load_or_new(cls, path: Path, video_id: str) -> VideoState:

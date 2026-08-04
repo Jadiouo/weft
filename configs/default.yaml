@@ -50,7 +50,7 @@ s3:
 
 # S4 聯合理解（§4.7）。唯一花額度的階段。
 s4:
-  model: gemini-2.5-flash-lite
+  model: gemini-3.1-flash-lite
   prompt_version: v1
   batch_segments: 3
   prev_summary_max_chars: 200
@@ -62,7 +62,7 @@ s4:
   local_fallback_model: Qwen/Qwen3-VL-8B-Instruct
 
 s5:
-  model: gemini-2.5-flash-lite
+  model: gemini-3.1-flash-lite
   prompt_version: v1
 
 # S6 渲染（§4.9）
@@ -74,7 +74,9 @@ s6:
 quota:
   # 主動節流水位。超過即停止本日處理，不靠撞 429（§5.5 #13）。
   safety_ratio: 0.9
-  requests_per_day: 1000
+  # 初始猜測值，不是事實——ledger 會從 429 回應學到真實配額並覆蓋它。
+  # SDD §6.5 原本寫 1000，實測 flash-lite free tier 是 20（差 50 倍）。
+  requests_per_day: 20
   # RPD 於太平洋時間午夜重置。用 zoneinfo 計算，不寫死時差。
   reset_timezone: America/Los_Angeles
 

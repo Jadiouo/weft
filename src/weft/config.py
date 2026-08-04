@@ -80,7 +80,13 @@ class S3Config(StageConfig):
 class S4Config(StageConfig):
     """聯合理解。唯一花額度的階段。SDD §4.7。"""
 
-    model: str = "gemini-2.5-flash-lite"
+    #: **釘住具體版本，不用 `gemini-flash-lite-latest` 這類別名。**
+    #: §4.7 的冪等鍵是 `segment_id + prompt_version + model`——別名會在
+    #: 底下換掉，讓已花額度的結果與新結果混在一起卻看不出來。
+    #:
+    #: 2026-08-04 實測：`gemini-2.5-flash-lite` 對新使用者已停用（404
+    #: "no longer available to new users"），雖然仍出現在 models.list()。
+    model: str = "gemini-3.1-flash-lite"
     prompt_version: str = "v1"
     #: 可將 2–3 個相鄰 segment 併為一次呼叫，但輸出仍逐 segment 分開
     batch_segments: int = 3
@@ -94,7 +100,7 @@ class S4Config(StageConfig):
 
 
 class S5Config(StageConfig):
-    model: str = "gemini-2.5-flash-lite"
+    model: str = "gemini-3.1-flash-lite"
     prompt_version: str = "v1"
 
 
@@ -110,7 +116,13 @@ class QuotaConfig(StageConfig):
 
     #: 主動節流水位。超過即停止本日處理，不靠撞 429（§5.5 #13）。
     safety_ratio: float = 0.9
-    requests_per_day: int = 1000
+    #: **初始猜測值，不是事實。** ledger 會從 429 回應中學到真實配額並覆蓋它
+    #: （SDD §9 的緩解：「Ledger 讀取實際配額而非寫死」）。
+    #:
+    #: SDD §6.5 原本寫 1000，實測 gemini flash-lite 的 free tier 是 **20**——
+    #: 差 50 倍，主動節流因此完全沒觸發，白燒了一整天配額。預設值改為保守
+    #: 的 20，寧可提早停也不要撞牆。
+    requests_per_day: int = 20
     #: RPD 於太平洋時間午夜重置——用 zoneinfo 算，不寫死時差（§6.2）
     reset_timezone: str = "America/Los_Angeles"
 

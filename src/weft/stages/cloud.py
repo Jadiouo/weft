@@ -43,6 +43,8 @@ def s4_understand(
     from ..quota import QuotaExhausted, QuotaLedger
     from .understand import (
         ApiKeyMissing,
+        PermanentApiError,
+        QuotaHit,
         apply_corrections,
         call_gemini,
         to_understanding,
@@ -74,19 +76,40 @@ def s4_understand(
             log.warning("%s；停止本日處理，進度已保存（§6.1）", exc)
             break
 
+        # 每一次**實際 API 呼叫**都要記帳，不是每個批次記一次——重試也
+        # 消耗配額。v0.3 首跑時記「批次」，帳本顯示 17 次而實際打了 45+ 次。
+        def _record_attempt(ok: bool, exc, _seg=batch[0].segment_id):
+            if not ok:
+                ledger.record(p.model, 0, 0, _seg, "error")
+
         try:
             batch_result = with_retries(
                 lambda b=batch: call_gemini(b, image_paths, prev_summary, p),
                 p.max_retries,
                 p.retry_backoff_sec,
+                on_attempt=_record_attempt,
             )
         except ApiKeyMissing:
             raise
+        except QuotaHit as exc:
+            # §6.1：撞到 429 代表主動節流的估算錯了。把 API 回報的真實配額
+            # 記進帳本，下次才不會重蹈覆轍（SDD §9 的緩解措施）。
+            if exc.limit:
+                ledger.record_observed_limit(p.model, exc.limit)
+            log.warning("撞到配額上限，停止本日處理（進度已保存）：%s",
+                        str(exc)[:200])
+            break
+        except PermanentApiError as exc:
+            # 模型不存在、請求格式錯——**整批都會失敗，繼續下去只是白燒配額**。
+            # v0.3 首跑時模型名已停用，15 個批次各撞 3 次才停下來。
+            log.error("永久性錯誤，立即中止（不再嘗試後續批次）：%s", exc)
+            for seg in batch:
+                seg.understanding = None
+            break
         except Exception as exc:  # noqa: BLE001
             # §4.7 失敗行為：重試後仍失敗 → understanding=null，繼續下一批
             log.error("批次 %s 失敗，標記為 null 並繼續：%s",
                       [s.segment_id for s in batch], exc)
-            ledger.record(p.model, 0, 0, batch[0].segment_id, "error")
             for seg in batch:
                 seg.understanding = None
             continue
@@ -130,7 +153,7 @@ def s4_understand(
     corrected = sum(len(u.corrections) for u in results)
     log.info("S4 %s：%d/%d 個 segment 完成（%d 個判定為投影片，%d 筆術語校正）。%s",
              work.video_id, len(results), len(segments), confirmed, corrected,
-             ledger.summary())
+             ledger.summary(p.model))
     return results
 
 

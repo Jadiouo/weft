@@ -123,7 +123,7 @@ def test_ledger_persists_across_instances(tmp_path):
 
 def test_safe_limit_is_ninety_percent_of_quota(ledger: QuotaLedger):
     """§6.1：安全水位設為配額的 90%。"""
-    assert ledger.safe_limit == int(1000 * 0.9)
+    assert ledger.safe_limit() == int(QuotaConfig().requests_per_day * 0.9)
 
 
 def test_check_passes_below_the_safe_limit(ledger: QuotaLedger):
@@ -137,7 +137,7 @@ def test_check_raises_before_exceeding_the_safe_limit(ledger: QuotaLedger):
     §6.1：「429 會讓做到一半的 segment 白費。」
     """
     moment = datetime(2026, 8, 4, 10, 0, tzinfo=PT)
-    for _ in range(ledger.safe_limit):
+    for _ in range(ledger.safe_limit()):
         ledger.record("m", 10, 1, None, "ok", at=moment)
 
     with pytest.raises(QuotaExhausted) as excinfo:
@@ -149,7 +149,7 @@ def test_check_accounts_for_the_whole_planned_batch(ledger: QuotaLedger):
     """§4.7 的批次策略會一次送 2–3 個 segment。若只檢查「還剩 ≥1 次」，
     批次的後半仍會撞牆。"""
     moment = datetime(2026, 8, 4, 10, 0, tzinfo=PT)
-    for _ in range(ledger.safe_limit - 2):
+    for _ in range(ledger.safe_limit() - 2):
         ledger.record("m", 10, 1, None, "ok", at=moment)
 
     ledger.check(planned_requests=2, at=moment)  # 剛好用完，可以
@@ -159,14 +159,14 @@ def test_check_accounts_for_the_whole_planned_batch(ledger: QuotaLedger):
 
 def test_remaining_never_goes_negative(ledger: QuotaLedger):
     moment = datetime(2026, 8, 4, 10, 0, tzinfo=PT)
-    for _ in range(ledger.safe_limit + 50):
+    for _ in range(ledger.safe_limit() + 50):
         ledger.record("m", 10, 1, None, "ok", at=moment)
     assert ledger.remaining(at=moment) == 0
 
 
 def test_safety_margin_leaves_room_below_the_real_quota(ledger: QuotaLedger):
     """安全水位必須嚴格小於真實配額——否則「主動節流」與撞 429 沒有差別。"""
-    assert ledger.safe_limit < ledger.cfg.requests_per_day
+    assert ledger.safe_limit() < ledger.cfg.requests_per_day
 
 
 def test_failed_requests_still_count(ledger: QuotaLedger):
@@ -174,3 +174,129 @@ def test_failed_requests_still_count(ledger: QuotaLedger):
     moment = datetime(2026, 8, 4, 10, 0, tzinfo=PT)
     ledger.record("m", 500, 0, "v#001", "error", at=moment)
     assert ledger.usage_today(at=moment).requests == 1
+
+
+# --------------------------------------------------------------------------
+# 從 429 學到真實配額（SDD §9 的緩解措施）
+# --------------------------------------------------------------------------
+
+
+def test_observed_limit_overrides_the_configured_guess(ledger: QuotaLedger):
+    """§9：「Ledger 讀取實際配額而非寫死。」
+
+    v0.3 首跑時設定檔寫 1000（來自 SDD §6.5），實際是 20——差 50 倍，
+    主動節流完全沒觸發，白燒了一整天配額。
+    """
+    assert ledger.limit_for("m") == ledger.cfg.requests_per_day
+
+    ledger.record_observed_limit("m", 20)
+    assert ledger.limit_for("m") == 20
+    assert ledger.safe_limit("m") == 18
+
+
+def test_observed_limit_is_per_model(ledger: QuotaLedger):
+    """free tier 的 RPD 是 per-model 的
+    （quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier）。"""
+    ledger.record_observed_limit("flash-lite", 20)
+    assert ledger.limit_for("flash-lite") == 20
+    assert ledger.limit_for("other") == ledger.cfg.requests_per_day
+
+
+def test_observed_limit_persists_across_instances(tmp_path):
+    """學到的配額要跨執行保留——否則每天都得再撞一次牆才學會。"""
+    cfg = QuotaConfig()
+    QuotaLedger(tmp_path / "q.db", cfg).record_observed_limit("m", 20)
+    assert QuotaLedger(tmp_path / "q.db", cfg).limit_for("m") == 20
+
+
+def test_check_uses_the_observed_limit(ledger: QuotaLedger):
+    moment = datetime(2026, 8, 4, 10, 0, tzinfo=PT)
+    ledger.record_observed_limit("m", 20)
+    for _ in range(18):  # 20 × 0.9
+        ledger.record("m", 10, 1, None, "ok", at=moment)
+
+    with pytest.raises(QuotaExhausted, match="實測配額"):
+        ledger.check(planned_requests=1, model="m", at=moment)
+
+
+def test_default_guess_is_conservative():
+    """預設值寧可低估。高估的代價是白燒一整天配額（實測過了）；
+    低估的代價只是提早停，隔天續跑。"""
+    assert QuotaConfig().requests_per_day <= 50
+
+
+# --------------------------------------------------------------------------
+# 錯誤分類（v0.3 首跑的教訓）
+# --------------------------------------------------------------------------
+
+
+def test_permanent_errors_are_not_retried():
+    """404「模型不存在」重試不會成功，只會多燒配額。
+
+    實測：v0.3 首跑時 gemini-2.5-flash-lite 回 404（對新使用者已停用），
+    15 個批次各重試 2 次＝45 次呼叫，把 20 RPD 燒光，0 個 segment 完成。
+    """
+    from weft.stages.understand import PermanentApiError, with_retries
+
+    calls = []
+
+    def always_404():
+        calls.append(1)
+        raise Exception("404 NOT_FOUND. {'error': {'code': 404, 'message': 'gone'}}")
+
+    with pytest.raises(PermanentApiError):
+        with_retries(always_404, max_retries=2, backoff_sec=0.01)
+    assert len(calls) == 1, f"永久性錯誤被重試了 {len(calls)} 次"
+
+
+def test_quota_errors_stop_immediately_and_carry_the_limit():
+    """429 不重試，且要把 API 回報的真實配額帶出來。"""
+    from weft.stages.understand import QuotaHit, with_retries
+
+    calls = []
+
+    def quota_exceeded():
+        calls.append(1)
+        raise Exception(
+            "429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'details': "
+            "[{'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier', "
+            "'quotaValue': '20'}]}}"
+        )
+
+    with pytest.raises(QuotaHit) as excinfo:
+        with_retries(quota_exceeded, max_retries=2, backoff_sec=0.01)
+    assert len(calls) == 1
+    assert excinfo.value.limit == 20
+
+
+def test_transient_errors_are_still_retried():
+    """503 之類的暫時性錯誤仍應重試——不然一次網路抖動就放棄整批。"""
+    from weft.stages.understand import with_retries
+
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) < 3:
+            raise Exception("503 UNAVAILABLE. {'error': {'code': 503}}")
+        return "ok"
+
+    assert with_retries(flaky, max_retries=2, backoff_sec=0.01) == "ok"
+    assert len(calls) == 3
+
+
+def test_every_attempt_is_reported_for_accounting():
+    """`on_attempt` 必須在**每次**呼叫後被叫到——記「批次」而不記「呼叫」
+    會讓帳本嚴重低估（實測差 2.6 倍）。"""
+    from weft.stages.understand import with_retries
+
+    attempts = []
+
+    def flaky():
+        if len(attempts) < 2:
+            raise Exception("503 UNAVAILABLE. {'error': {'code': 503}}")
+        return "ok"
+
+    with_retries(flaky, max_retries=3, backoff_sec=0.01,
+                 on_attempt=lambda ok, exc: attempts.append(ok))
+    assert attempts == [False, False, True]

@@ -117,6 +117,10 @@ SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的�
 `is_slide: false` 時，填 `reject_reason`（一句話），`slide_text` 留空字串，
 `content_blocks` 只能用 `provenance_kind: "transcript"`。
 
+**若這一段既不是投影片、逐字稿又是空的**（例如片頭動畫、還沒開始講話的
+畫面），`content_blocks` 請回**空陣列**。這種段落沒有任何可溯源的材料，
+描述畫面上看到的字會變成無法驗證的內容，系統會整批退回。
+
 ### 2. 逐字轉錄投影片上的文字（`slide_text`）
 
 **先抄，再詮釋。** 把畫面上的文字**原樣**打出來，保留換行與排列順序
@@ -361,6 +365,18 @@ def to_understanding(raw: dict, segment, cfg):
             log.warning("%s 的 block#%d 宣稱來自投影片，但該段判定不是投影片，已丟棄",
                         segment.segment_id, i)
             continue
+        # 逐字稿為空時，transcript 來源同樣無法溯源。
+        #
+        # 實測（v0.3 首跑）：片頭 0–50 秒有 12 個 segment 沒有任何字幕，
+        # VLM 判定 is_slide=false（正確），卻仍描述畫面上的字並標成
+        # transcript 來源——因為 prompt 只留了這一個選項給它。9 個這樣的
+        # block 全部溯源失敗，佔未通過總數的四分之一。
+        if kind == "transcript" and not (
+            segment.transcript_corrected or segment.transcript_raw
+        ).strip():
+            log.warning("%s 的 block#%d 宣稱來自逐字稿，但該段逐字稿為空，已丟棄",
+                        segment.segment_id, i)
+            continue
         try:
             blocks.append(
                 ContentBlock(
@@ -386,22 +402,91 @@ def to_understanding(raw: dict, segment, cfg):
     )
 
 
-def with_retries(fn, max_retries: int, backoff_sec: float):
+class PermanentApiError(RuntimeError):
+    """重試不會改變結果的錯誤（模型不存在、請求格式錯、認證失敗）。"""
+
+
+class QuotaHit(RuntimeError):
+    """API 回了 429。帶著它從回應中解析出的**真實配額上限**。"""
+
+    def __init__(self, message: str, limit: int | None = None) -> None:
+        super().__init__(message)
+        self.limit = limit
+
+
+#: HTTP 狀態碼 → 是否值得重試。
+#: 404／400／401／403 重試**沒有意義**——模型不存在不會因為再問一次就存在，
+#: 而每次重試都消耗一次配額。實測 v0.3 首跑時 `gemini-2.5-flash-lite` 回 404
+#: （對新使用者已停用），15 個批次各重試 2 次＝45 次呼叫，把 20 RPD 的
+#: 配額燒光，一個 segment 都沒完成。
+_PERMANENT_STATUS = (400, 401, 403, 404, 405)
+_QUOTA_STATUS = (429,)
+
+
+def _status_of(exc: Exception) -> int | None:
+    code = getattr(exc, "code", None) or getattr(exc, "status_code", None)
+    if isinstance(code, int):
+        return code
+    text = str(exc)
+    for status in (*_PERMANENT_STATUS, *_QUOTA_STATUS, 500, 503):
+        if text.startswith(f"{status} ") or f"'code': {status}" in text:
+            return status
+    return None
+
+
+def _parse_quota_limit(exc: Exception) -> int | None:
+    """從 429 的回應中取出真實的配額上限。
+
+    SDD §9 對「Google 曾大幅調降免費額度」的緩解是「**Ledger 讀取實際配額
+    而非寫死**」。429 的回應正好帶著它：
+        {'quotaId': 'GenerateRequestsPerDayPerProjectPerModel-FreeTier',
+         'quotaValue': '20'}
+    """
+    import re
+
+    text = str(exc)
+    if "PerDay" not in text:
+        return None
+    match = re.search(r"['\"]quotaValue['\"]:\s*['\"](\d+)['\"]", text)
+    if match:
+        return int(match.group(1))
+    match = re.search(r"limit:\s*(\d+)", text)
+    return int(match.group(1)) if match else None
+
+
+def with_retries(fn, max_retries: int, backoff_sec: float, on_attempt=None):
     """指數退避重試。SDD §4.7 失敗行為：重試 2 次後標記 understanding=null。
 
-    **額度耗盡不重試**——重試只會再撞一次牆，而 §6.1 說 429 會讓做到一半
-    的 segment 白費。
+    **只重試暫時性錯誤。** 永久性錯誤（404 模型不存在、400 請求格式錯）
+    重試不會成功，只會多燒配額；額度耗盡（429）更是重試只會再撞一次牆，
+    §6.1 明說「429 會讓做到一半的 segment 白費」。
+
+    `on_attempt` 在**每次實際 API 呼叫後**被呼叫（無論成敗），讓呼叫端能把
+    每一次呼叫都記進帳本——記「批次」而不記「呼叫」會讓帳本嚴重低估用量。
     """
     from ..quota import QuotaExhausted
 
     last: Exception | None = None
     for attempt in range(max_retries + 1):
         try:
-            return fn()
+            result = fn()
+            if on_attempt:
+                on_attempt(True, None)
+            return result
         except (QuotaExhausted, ApiKeyMissing):
             raise
         except Exception as exc:  # noqa: BLE001
             last = exc
+            status = _status_of(exc)
+            if on_attempt:
+                on_attempt(False, exc)
+
+            if status in _QUOTA_STATUS:
+                raise QuotaHit(str(exc), _parse_quota_limit(exc)) from exc
+            if status in _PERMANENT_STATUS:
+                raise PermanentApiError(
+                    f"HTTP {status}，重試不會改變結果：{exc}"
+                ) from exc
             if attempt == max_retries:
                 break
             wait = backoff_sec * (2**attempt)

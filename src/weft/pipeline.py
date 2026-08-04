@@ -306,7 +306,7 @@ def run_understand(cfg: Config, video_id: str | None = None, max_requests: int |
         log.warning("沒有已就緒的影片。請先跑 `weft prepare <playlist|video>`。")
         return 1
 
-    log.info("understand：%d 支待處理。%s", len(targets), ledger.summary())
+    log.info("understand：%d 支待處理。%s", len(targets), ledger.summary(cfg.s4.model))
     completed = 0
     for vid in targets:
         if max_requests is not None and ledger.usage_today().requests >= max_requests:
@@ -328,5 +328,5 @@ def run_understand(cfg: Config, video_id: str | None = None, max_requests: int |
         except Exception as exc:  # noqa: BLE001
             log.exception("%s 的理解階段失敗，繼續下一支：%s", vid, exc)
 
-    log.info("understand 完成：%d/%d 支。%s", completed, len(targets), ledger.summary())
+    log.info("understand 完成：%d/%d 支。%s", completed, len(targets), ledger.summary(cfg.s4.model))
     return 0

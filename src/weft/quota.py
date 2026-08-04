@@ -33,6 +33,14 @@ CREATE TABLE IF NOT EXISTS usage (
     status        TEXT    NOT NULL
 );
 CREATE INDEX IF NOT EXISTS usage_by_day ON usage(quota_day, model);
+
+-- 從 429 回應學到的**真實**配額上限。SDD §9 的緩解：「Ledger 讀取實際
+-- 配額而非寫死」。設定檔的 requests_per_day 只是初始猜測。
+CREATE TABLE IF NOT EXISTS observed_quota (
+    model      TEXT PRIMARY KEY,
+    limit_rpd  INTEGER NOT NULL,
+    observed_at TEXT   NOT NULL
+);
 """
 
 
@@ -126,13 +134,44 @@ class QuotaLedger:
 
     # -- 主動節流（§6.1）-------------------------------------------------
 
-    @property
-    def safe_limit(self) -> int:
+    def record_observed_limit(self, model: str, limit: int,
+                             at: datetime | None = None) -> None:
+        """記下從 429 回應學到的真實配額。SDD §9 的緩解措施。
+
+        設定檔寫的是猜測值——v0.3 首跑時寫的是 1000（來自 SDD §6.5），
+        實際是 **20**。差 50 倍，主動節流因此完全沒發揮，白燒了一整天配額。
+        """
+        moment = (at or datetime.now(tz=self.timezone)).astimezone(self.timezone)
+        with closing(sqlite3.connect(self.path)) as conn:
+            conn.execute(
+                "INSERT INTO observed_quota (model, limit_rpd, observed_at) VALUES (?,?,?) "
+                "ON CONFLICT(model) DO UPDATE SET limit_rpd=excluded.limit_rpd, "
+                "observed_at=excluded.observed_at",
+                (model, int(limit), moment.isoformat(timespec="seconds")),
+            )
+            conn.commit()
+        log.warning("已記下 %s 的真實配額上限：%d RPD（設定檔寫的是 %d）",
+                    model, limit, self.cfg.requests_per_day)
+
+    def observed_limit(self, model: str | None) -> int | None:
+        if not model:
+            return None
+        with closing(sqlite3.connect(self.path)) as conn:
+            row = conn.execute(
+                "SELECT limit_rpd FROM observed_quota WHERE model = ?", (model,)
+            ).fetchone()
+        return int(row[0]) if row else None
+
+    def limit_for(self, model: str | None = None) -> int:
+        """該模型的配額上限。**實測值優先於設定檔。**"""
+        return self.observed_limit(model) or self.cfg.requests_per_day
+
+    def safe_limit(self, model: str | None = None) -> int:
         """安全水位：配額的 `safety_ratio`。超過即停止本日處理。"""
-        return int(self.cfg.requests_per_day * self.cfg.safety_ratio)
+        return int(self.limit_for(model) * self.cfg.safety_ratio)
 
     def remaining(self, model: str | None = None, at: datetime | None = None) -> int:
-        return max(0, self.safe_limit - self.usage_today(model, at).requests)
+        return max(0, self.safe_limit(model) - self.usage_today(model, at).requests)
 
     def check(self, planned_requests: int = 1, model: str | None = None,
               at: datetime | None = None) -> None:
@@ -141,16 +180,18 @@ class QuotaLedger:
         這是 §5.5 #13 的落實：主動預估與節流，不靠撞 429。
         """
         used = self.usage_today(model, at).requests
-        if used + planned_requests > self.safe_limit:
+        limit = self.safe_limit(model)
+        if used + planned_requests > limit:
+            source = "實測" if self.observed_limit(model) else "設定"
             raise QuotaExhausted(
                 f"本日已用 {used} 次請求，再送 {planned_requests} 次會超過安全水位 "
-                f"{self.safe_limit}（配額 {self.cfg.requests_per_day} × "
+                f"{limit}（{source}配額 {self.limit_for(model)} × "
                 f"{self.cfg.safety_ratio}）。下次重置：{self.next_reset(at).isoformat()}"
             )
 
-    def summary(self, at: datetime | None = None) -> str:
-        usage = self.usage_today(at=at)
+    def summary(self, model: str | None = None, at: datetime | None = None) -> str:
+        usage = self.usage_today(model, at)
         return (
-            f"配額日 {self.quota_day(at)}：{usage.requests}/{self.safe_limit} 次請求"
+            f"配額日 {self.quota_day(at)}：{usage.requests}/{self.safe_limit(model)} 次請求"
             f"（input {usage.input_tokens:,} / output {usage.output_tokens:,} tokens）"
         )
