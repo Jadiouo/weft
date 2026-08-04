@@ -224,10 +224,108 @@ def run_prepare(target: str, cfg: Config, force: bool = False) -> int:
     return 1 if failed == len(targets) and targets else 0
 
 
-def run_understand(cfg: Config, video_id: str | None = None, max_requests: int | None = None) -> int:
-    """S4–S6。消化 prepare 囤下的 buffer，額度耗盡即停。SDD §6.4。"""
+def _ready_for_understanding(cfg: Config) -> list[str]:
+    """掃描 work/，找出已跑完 prepare、可進 S4 的影片。SDD §6.3 重建待辦佇列。"""
+    if not cfg.work_dir.exists():
+        return []
+    ready: list[str] = []
+    for video_dir in sorted(p for p in cfg.work_dir.iterdir() if p.is_dir()):
+        work = WorkPaths(cfg.work_dir, video_dir.name)
+        if not (work.state.exists() and work.segments.exists()):
+            continue
+        state = VideoState.load(work.state)
+        if state.is_satisfied(Stage.S3_ALIGN, stage_params(cfg, Stage.S3_ALIGN)):
+            ready.append(video_dir.name)
+    return ready
+
+
+def understand_one(video_id: str, cfg: Config) -> bool:
+    """單支影片的 S4–S6。回傳是否完整跑完（False = 額度用盡而中止）。"""
+    from .ir import Segment, VideoIR
+    from .quota import QuotaExhausted, QuotaLedger
     from .stages import cloud
 
-    work = WorkPaths(cfg.work_dir, video_id or "")
-    cloud.s4_understand(cfg, work, [], None)  # type: ignore[arg-type]
+    work = WorkPaths(cfg.work_dir, video_id)
+    out = OutPaths(cfg.out_dir)
+    state = VideoState.load_or_new(work.state, video_id)
+    sync_state(cfg, state)
+
+    meta = VideoMeta.model_validate_json(work.meta.read_text(encoding="utf-8"))
+    segments = [
+        Segment.model_validate(row)
+        for row in json.loads(work.segments.read_text(encoding="utf-8"))
+    ]
+    lexicon = (
+        Lexicon.model_validate_json(work.lexicon.read_text(encoding="utf-8"))
+        if work.lexicon.exists()
+        else None
+    )
+    candidates = CandidateSet.model_validate_json(work.candidates.read_text(encoding="utf-8"))
+    slides = _slides_from(work, candidates)
+
+    # ---- S4 理解 ----
+    cloud.s4_understand(cfg, work, segments, lexicon)
+    done = [s for s in segments if s.understanding is not None]
+    state.understood_segments = [s.segment_id for s in done]
+
+    if len(done) < len(segments):
+        # 額度用盡或部分失敗——保存進度，不推進到 S5/S6。
+        # §6.3：重啟時掃描 work/，從中斷處繼續。
+        state.save(work.state)
+        log.info("%s：%d/%d segment 完成，保留進度待續跑",
+                 video_id, len(done), len(segments))
+        return False
+
+    state.mark_done(Stage.S4_UNDERSTAND, stage_params(cfg, Stage.S4_UNDERSTAND))
+    state.save(work.state)
+
+    ir = VideoIR(meta=meta, slides=slides, segments=segments)
+
+    # ---- S5 統整 ----
+    ir = cloud.s5_synthesize(cfg, work, ir)
+    state.mark_done(Stage.S5_SYNTHESIZE, stage_params(cfg, Stage.S5_SYNTHESIZE))
+
+    # ---- S6 渲染（含 §5.4 溯源閘門）----
+    cloud.s6_render(cfg, ir, work, out)
+    work.video_ir.write_text(ir.model_dump_json(indent=2), encoding="utf-8")
+    state.mark_done(Stage.S6_RENDER, stage_params(cfg, Stage.S6_RENDER))
+    state.save(work.state)
+    return True
+
+
+def run_understand(cfg: Config, video_id: str | None = None, max_requests: int | None = None) -> int:
+    """S4–S6。消化 prepare 囤下的 buffer，額度耗盡即停。SDD §6.4。"""
+    from .quota import QuotaExhausted, QuotaLedger
+    from .stages.understand import ApiKeyMissing
+
+    out = OutPaths(cfg.out_dir)
+    ledger = QuotaLedger(out.quota_db, cfg.quota)
+    targets = [video_id] if video_id else _ready_for_understanding(cfg)
+    if not targets:
+        log.warning("沒有已就緒的影片。請先跑 `weft prepare <playlist|video>`。")
+        return 1
+
+    log.info("understand：%d 支待處理。%s", len(targets), ledger.summary())
+    completed = 0
+    for vid in targets:
+        if max_requests is not None and ledger.usage_today().requests >= max_requests:
+            log.info("已達本次執行的請求上限 %d，停止", max_requests)
+            break
+        try:
+            if understand_one(vid, cfg):
+                completed += 1
+            else:
+                # 額度用盡——後面的影片同樣跑不動，不必逐支重試
+                log.info("額度用盡，停止本日處理。下次重置：%s", ledger.next_reset().isoformat())
+                break
+        except ApiKeyMissing as exc:
+            log.error("%s", exc)
+            return 2
+        except QuotaExhausted as exc:
+            log.info("%s", exc)
+            break
+        except Exception as exc:  # noqa: BLE001
+            log.exception("%s 的理解階段失敗，繼續下一支：%s", vid, exc)
+
+    log.info("understand 完成：%d/%d 支。%s", completed, len(targets), ledger.summary())
     return 0

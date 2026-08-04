@@ -337,31 +337,42 @@ def test_needs_review_videos_do_not_reach_chunks(cfg: Config, tmp_path):
 # --------------------------------------------------------------------------
 
 
-def test_unimplemented_stages_report_what_is_missing(cfg: Config, tmp_path):
-    """SDD §7.1 完成條件：「跑 pytest 會失敗，但失敗訊息清楚指出缺少哪些實作」。
+def test_no_stage_is_left_unimplemented():
+    """SDD §4 的十個階段全部有實作。
 
-    這條測試把該條件變成可驗證的東西：每個未實作階段都必須說明自己是誰、
-    對應 SDD 哪一節、屬哪個 Phase、還缺什麼。
+    這條測試取代了 Phase 0 的「未實作階段須報出缺什麼」——那條的任務
+    （§7.1：「跑 pytest 會失敗，但失敗訊息清楚指出缺少哪些實作」）已經
+    完成，S0–S6 全部落地。現在改為反向守則：**不得有階段悄悄退回 stub**。
+
+    `pending()` 的機制保留，供未來新增階段時沿用。
     """
-    from weft.stages import cloud
+    import ast
+    from pathlib import Path
 
-    work = WorkPaths(tmp_path, "dummy")
-    # 已實作的階段從這裡移除——清單本身就是進度表。
-    # 已完成：S0–S3（Phase 1，§4.1–§4.6）
-    cases = [
-        ("S4", lambda: cloud.s4_understand(cfg, work, [], None), "§4.7"),
-        ("S5", lambda: cloud.s5_synthesize(cfg, work, None), "§4.8"),
-        ("S6", lambda: cloud.s6_render(cfg, None, work, OutPaths(tmp_path)), "§4.9"),
-    ]
+    from weft.state import Stage
 
-    for stage, call, section in cases:
-        with pytest.raises(StageNotImplemented) as excinfo:
-            call()
-        message = str(excinfo.value)
-        assert stage in message, f"{stage} 的錯誤訊息未指出階段名稱"
-        assert section in message, f"{stage} 的錯誤訊息未指出 SDD 章節"
-        assert "Phase" in message, f"{stage} 的錯誤訊息未指出所屬 Phase"
-        assert "待實作" in message, f"{stage} 的錯誤訊息未列出待實作項目"
+    src = Path(__file__).resolve().parents[1] / "src" / "weft" / "stages"
+    stubbed: list[str] = []
+    for module in ("local.py", "cloud.py"):
+        tree = ast.parse((src / module).read_text(encoding="utf-8"))
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef):
+                continue
+            for call in ast.walk(node):
+                if (
+                    isinstance(call, ast.Call)
+                    and isinstance(call.func, ast.Name)
+                    and call.func.id == "pending"
+                ):
+                    stubbed.append(f"{module}:{node.name}")
+    assert not stubbed, f"這些階段仍是 stub：{stubbed}"
+
+    # 每個 SDD 階段都要有對應的參數 hash（否則續跑判斷會漏掉它）
+    from weft.config import Config
+    from weft.pipeline import stage_params
+
+    cfg = Config()
+    assert len({stage_params(cfg, s) for s in Stage}) == len(Stage)
 
 
 def _internal_boundaries(candidates, duration: float) -> list[float]:
