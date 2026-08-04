@@ -1,0 +1,484 @@
+{
+ "slide_001": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "畫面中只顯示抽象的符號圖案，沒有文字。",
+   "slide_text": ""
+  },
+  "raw_len": 85,
+  "json_ok": true,
+  "sec": 1.08
+ },
+ "slide_002": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為講義標題。",
+   "slide_text": "醫方法門"
+  },
+  "raw_len": 79,
+  "json_ok": true,
+  "sec": 1.01
+ },
+ "slide_003": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主要為講者及佈景，包含宣傳標語和書法。",
+   "slide_text": "我們要明白一個基本道理。\n\n學到故實際上複雜多。」"
+  },
+  "raw_len": 113,
+  "json_ok": true,
+  "sec": 1.18
+ },
+ "slide_004": {
+  "parsed": null,
+  "raw_len": 7578,
+  "json_ok": false,
+  "sec": 45.04
+ },
+ "slide_005": {
+  "parsed": null,
+  "raw_len": 7581,
+  "json_ok": false,
+  "sec": 44.89
+ },
+ "slide_006": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面中佈景上的書法是為了講解而製作的教材。",
+   "slide_text": "\n裝置文明早己揭示人體\n\n裝置文明早己揭示人體"
+  },
+  "raw_len": 112,
+  "json_ok": true,
+  "sec": 1.33
+ },
+ "slide_007": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主要為佈景，包含書法和標語。",
+   "slide_text": "\n學之光。\n\n探求心靈的真章，\n尋根創新。\n\n未來之路。\n\n未來之路\n\n讓我們重新解讀這些失傳的醫學道理"
+  },
+  "raw_len": 135,
+  "json_ok": true,
+  "sec": 1.26
+ },
+ "slide_008": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "這是佈景畫面，而非講義或投影片。",
+   "slide_text": "\n古典醫學之\n自由設計系列\n\n古典醫學之人體設計系列"
+  },
+  "raw_len": 103,
+  "json_ok": true,
+  "sec": 1.07
+ },
+ "slide_009": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主要呈現講者肖像及相關職稱與學歷。",
+   "slide_text": "\n主持人：游 朱義 師\n\n現任:\n行政院國家發展基金 視訪委員\n中華民國青年創業總會 融資 總顧問\n中小企業聯合輔 中心 財務顧問 跨國連鎖導師\n模式科技/台灣光纖 負責人\n對園科技/台灣光纖 負責人\n對園法人 王俊安 門代表基金會 董事\n\n學歷:\n法界大學院學\n中興企研所顧問研究班學\n中原大學 工業系 畢 "
+  },
+  "raw_len": 246,
+  "json_ok": true,
+  "sec": 1.75
+ },
+ "slide_010": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為講者肖像及個人資料，並有相關職稱與經歷。",
+   "slide_text": "\n王講人：游朱義師\n\n經歷:\n中國生產力中心顧問師\n中心衛生發展中心講師\n1984年併基金優秀十大表工\n行政院國家發展基金視訪委員\n中華民國青年創業總會融資總檢顧問\n成功大學研究所管理顧問師講師\n中小企業聯合輔導中心顧問師講師\n美國IQ AIS09000主任評審員考試合格\n2007年衛生署遠距離醫療應變計畫主持人之一\n2015年世 界抗疫名醫學年會主講人之一"
+  },
+  "raw_len": 275,
+  "json_ok": true,
+  "sec": 1.9
+ },
+ "slide_011": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主要為講者講解的教材內容。",
+   "slide_text": "\n致敬先輩 永遠學習\n\n<br>\n\n世界和平 人人共享\n\n<br>\n\n永續發展 生態保護\n\n<br>\n\n促進創新 提升能力\n\n<br>\n\n打造共贏 共同繁榮"
+  },
+  "raw_len": 167,
+  "json_ok": true,
+  "sec": 1.46
+ },
+ "slide_012": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主要為教材內容，包含多行文字和圖標。",
+   "slide_text": "\n自求法喜的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實踐積勤的"
+  },
+  "raw_len": 136,
+  "json_ok": true,
+  "sec": 1.36
+ },
+ "slide_013": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現的是教材標題頁。",
+   "slide_text": "01 生命之初、胎體成長"
+  },
+  "raw_len": 89,
+  "json_ok": true,
+  "sec": 1.01
+ },
+ "slide_014": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為講者鏡頭，背景有佈景。",
+   "slide_text": "\n追求法喜的身體健康\n創造通達的人際關係\n經營和諧的圖滿家庭\n建立利益眾生的事業\n實現精勤的\n智慧和美"
+  },
+  "raw_len": 138,
+  "json_ok": true,
+  "sec": 1.32
+ },
+ "slide_015": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為文字、圖表、經文等準備好的教材內容。",
+   "slide_text": "大土老君內觀經典\n\n天地構煉，陰陽布化，萬物以生。承其宿業，分靈一。父母和合，人受其生。始,\n一月為地，精血凝也。\n二月成敗，形兆胚也。\n三月陽神為三魂，動而生也。\n四月陰靈為七魄，靜鎮形也。\n五月五行分藏，以安神也。\n六月六律定勝，用滋養也。\n七月七精開竅，通光明也。\n八月八景神具，降真靈也。\n九月宮室羅布，以定構也。\n十月氣足，萬象成也。\n元和清檢，時不停也。"
+  },
+  "raw_len": 284,
+  "json_ok": true,
+  "sec": 2.07
+ },
+ "slide_016": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面上的文字是佈景，而非講義內容。",
+   "slide_text": "\n自求法喜的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實踐現有的\n智慧積勤的"
+  },
+  "raw_len": 140,
+  "json_ok": true,
+  "sec": 1.37
+ },
+ "slide_017": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為文字、圖表、經文等準備好的教材內容。",
+   "slide_text": "人士老君內觀經典\n\n天地構煉，陰陽布化，萬物以生。承其宿業，分靈一元。父母和合，人受其生。始，\n 一月為地，精血凝也。\n 二月成胎，形兆胚也。\n 三月陽神為三魂，動血生也。\n 四月陰靈為七魄，靜鎮形也。\n 五月五行分藏，以安神也。\n 六月六律定勝，用滋養也。\n 七月七清閒竅，通光明也。\n 八月八景神具，降真靈也。\n 九月宮室羅布，以定構也。\n 十月氣足，萬象成也。\n 元和清檢，時不停也。"
+  },
+  "raw_len": 296,
+  "json_ok": true,
+  "sec": 2.09
+ },
+ "slide_018": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面中存在佈景上的書法和招牌，而非講者直接呈現的教材內容。",
+   "slide_text": "追求法喜的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實現精勤的富貴生活"
+  },
+  "raw_len": 147,
+  "json_ok": true,
+  "sec": 1.38
+ },
+ "slide_019": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為文字、經文，且有明顯的排版和佈局。",
+   "slide_text": "人士老君內觀經典\n\n天地構煉，陰陽布化，萬物以生。承其宿業，分靈一。父母和合，人受其生。始。\n一月為地，精血凝也。\n二月成敗，形兆胚也。\n三月陽神為三魂，動而生也。\n四月陰雲為七魄，靜鎮形也。\n五月五行分藏，以安神也。\n六月六律定勝，用滋養也。\n七月七清閒竅，通光明也。\n八月八景神具，降真靈也。\n九月宮室羅布，以定精也。\n十月氣足，萬象成也。\n元和晴會，時不停也。"
+  },
+  "raw_len": 283,
+  "json_ok": true,
+  "sec": 2.17
+ },
+ "slide_020": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現講者鏡頭和背景佈景，並有文字標語。",
+   "slide_text": "追求法喜的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實踐精勤的智慧\n一切預備的"
+  },
+  "raw_len": 144,
+  "json_ok": true,
+  "sec": 1.42
+ },
+ "slide_021": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現的是講義或教材上的文字內容。",
+   "slide_text": "人士老君內觀經\n\n天地構煉，陰陽布化，萬物以生。承其宿業，分靈一元。父母和合，人受其生。始，\n一月為地，精血凝也。\n二月成胎，形兆胚也。\n三月陽神為三魂，動血生也。\n四月陰靈為七魄，靜鎮形也。\n五月五行分藏，以安神也。\n六月六律定勝，用滋養也。\n七月七清閒竅，通光明也。\n八月八景神具，降真靈也。\n九月宮室羅布，以定構也。\n十月氣，萬象成也。\n元和晴食，時不停也。"
+  },
+  "raw_len": 278,
+  "json_ok": true,
+  "sec": 2.17
+ },
+ "slide_022": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面上有佈景文字，是為了講解而製作的教材。",
+   "slide_text": "追求法意的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實踐智慧的積蓄的"
+  },
+  "raw_len": 138,
+  "json_ok": true,
+  "sec": 1.37
+ },
+ "slide_023": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為文字、經文，是為了講解而製作的教材。",
+   "slide_text": "人士老君內觀經典\n\n天地構煉，陰陽布化，萬物以生。承其宿業，分靈一。父母和合，人受其生。始，\n一月為地，精血凝也。\n二月成敗，形兆胚也。\n三月陽神為三魂，動血生也。\n四月陰雲為七魄，靜鎮形也。\n五月五行分藏，以安神也。\n六月六律定勝，用滋養也。\n七月七精聞竅，通光明也。\n八月八景神具，降真靈也。\n九月宮室羅布，以定構也。\n十月氣足，萬象成也\n元和清檢，時不停也。"
+  },
+  "raw_len": 283,
+  "json_ok": true,
+  "sec": 2.12
+ },
+ "slide_024": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面上的文字是佈景，而非講者所使用的教材。",
+   "slide_text": "追求法喜的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實現精勤的"
+  },
+  "raw_len": 135,
+  "json_ok": true,
+  "sec": 1.33
+ },
+ "slide_025": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為文字、圖表、經文等準備好的教材內容。",
+   "slide_text": "太陽,\n二月成敗,\n三月陽神為三魂，動而生也。\n四月陰雲為七魄，靜鎮形也。\n五月五行分藏，\n六月六律定 apportionment，\n七月七清閒發，\n八月八景神具，\n九月宮室羅布，\n十月氣足，\n元和晴食，時不待也。"
+  },
+  "raw_len": 205,
+  "json_ok": true,
+  "sec": 1.6
+ },
+ "slide_026": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面包含講者鏡頭和背景佈景，並有文字內容。",
+   "slide_text": "\n自求法喜的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實踐規範的理想\n"
+  },
+  "raw_len": 141,
+  "json_ok": true,
+  "sec": 1.37
+ },
+ "slide_027": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現的是講義或教材上的文字。",
+   "slide_text": "\n太上老君內觀經\n\n天地構煉，陰陽布化，萬物以生。承其宿業,\n分靈一元。父母和合，人受其生。始,\n\n一月為地，精血凝也。\n二月成胎，形兆胚也。\n三月陽神為三魂，動血生也。\n四月陰靈為七魄，靜鎮形也。\n五月五行分藏，以安神也。\n六月六律定勝，用滋養也。\n七月七清閒竅，通光明也。\n八月八景神具，降真靈也。\n九月宮室羅布，以定構也。\n十月足，萬象成也。\n元和清檢，時不停也。"
+  },
+  "raw_len": 274,
+  "json_ok": true,
+  "sec": 2.05
+ },
+ "slide_028": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為教材內容，包含多行文字。",
+   "slide_text": "\n自求法意的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實踐規範的道德\n追求精勤的智慧"
+  },
+  "raw_len": 144,
+  "json_ok": true,
+  "sec": 1.37
+ },
+ "slide_029": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為文字、圖表、經文等準備好的教材內容。",
+   "slide_text": "\n大上者內觀經典\n\n天地構精，陰陽布化，萬物以生。承其宿業 \n分靈一道。父母和合，人受其生。始。\n\n一月為地，精血凝也。\n二月成敗，形兆胜也。\n三月陽神為三魂，動血生也。\n四月陰雲為七魄，靜鎮形也。\n五月五行分藏，以安神也。\n六月六律定勝，用滋養也。\n七月七精聞竅，通光明也。\n八月八景神具，降真靈也。\n九月宮室羅布，以定構也。\n十月氣足，萬象成也。\n元和清檢，時不停也。"
+  },
+  "raw_len": 290,
+  "json_ok": true,
+  "sec": 2.1
+ },
+ "slide_030": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面上的文字是為了講解而製作的教材。",
+   "slide_text": "追求法意的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實踐智慧的相關物的"
+  },
+  "raw_len": 136,
+  "json_ok": true,
+  "sec": 1.31
+ },
+ "slide_031": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現為講義或教材的文字內容。",
+   "slide_text": "人士老君內觀經\n\n天地構煉，陰陽布化，萬物以生。承其宿業，分靈一元。父母和合，人受其生。始。\n\n一月為地，精血凝也。\n二月成敗，形兆胜也。\n三月陽神為三魂，動血生也。\n四月陰雲為七魄，靜鎮形也。\n五月五行分藏，以安神也。\n六月六律定勝，用滋養也。\n七月七清閒竅，通光明也。\n八月八景神具，降真靈也。\n九月宮室羅布，以定精也。\n十月氣足，萬象成也。\n元和晴食，時不停也。"
+  },
+  "raw_len": 279,
+  "json_ok": true,
+  "sec": 2.05
+ },
+ "slide_032": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主要為講者鏡頭，背景有佈景文字。",
+   "slide_text": "\n自求法喜的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實現精勤的功德"
+  },
+  "raw_len": 136,
+  "json_ok": true,
+  "sec": 1.34
+ },
+ "slide_033": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為文字、經文，是為了講解而製作的教材。",
+   "slide_text": "天地構構，陰陽布化，萬物以生。承其宿業，分靈一元。父母和合，人受其生。始,\n一月為地，精血凝也。\n二月成敗，形兆胚也。\n三月陽神為三魂，動而生也。\n四月陰雲為七魄，靜鎮形也。\n五月五行分藏，以安神也。\n六月六律定勝，用滋養也。\n七月七清閒竅，通光明也。\n八月八景神具，除真靈也。\n九月宮室羅布，以定構也。\n十月氣足，萬象成也。\n元和晴食，時不停也。"
+  },
+  "raw_len": 273,
+  "json_ok": true,
+  "sec": 2.04
+ },
+ "slide_034": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現的是講者講解的教材內容，包含圖片和文字。",
+   "slide_text": "《一月為胞，精血凝也》\n\n父母的陰陽合和開始時，受精卵是一個個月生長成《胞》，是父精母血的凝聚物。【此時 scrambled 關係進入】。\n\n【比喻：賈房子簽合同】"
+  },
+  "raw_len": 175,
+  "json_ok": true,
+  "sec": 1.52
+ },
+ "slide_035": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主要為講者鏡頭，背景有佈景。",
+   "slide_text": "追求法意的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實踐現有的\n智慧規劃的"
+  },
+  "raw_len": 137,
+  "json_ok": true,
+  "sec": 1.02
+ },
+ "slide_036": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現的是講義或教材的頁面。",
+   "slide_text": "[第一周]\n《一月為胞，精血凝也»\n\n父母的陰陽合和開始時，受精卵是一個個月生長成《胞》,\n是父精母血的凝聚物。【此時謹謹閉始進入】。\n\n【比喻：胃房子養合禽】"
+  },
+  "raw_len": 166,
+  "json_ok": true,
+  "sec": 1.45
+ },
+ "slide_037": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主要為講者鏡頭，背景有佈景文字。",
+   "slide_text": "\n自求法喜的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實踐規範的理想\n"
+  },
+  "raw_len": 138,
+  "json_ok": true,
+  "sec": 1.38
+ },
+ "slide_038": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現的是講者所使用的教材內容。",
+   "slide_text": "第一周\n第二周\n第三周\n第四周\n\n《一月為胞，精血凝也》\n\n父母的陰陽合和開始時，受精卵的一個生長成為《胞》，是父精母血的凝聚物。【此時謹謹閉始進入】。\n\n【比喻：寶子簽合同】"
+  },
+  "raw_len": 179,
+  "json_ok": true,
+  "sec": 1.52
+ },
+ "slide_039": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主要為教材內容，包含文字、圖表等。",
+   "slide_text": "\n《二月敗鬼，形兆旺也》\n(房子開始裝潢)\n胎型已成，從一個人飽點垮，漸漸發展。具有細的胎型，七靈投住在此，如同房子是他所有了，所以開始裝潢 (趨向人形象展)， 開始搬家，累世業力的種子也陸續到位。\n\n何賴耶識的無量種子，並非一次到位，而是隨著七靈意念，逐步攪透。 佛法說在有業障身， 這個無量的業種子，遍佈塵苦法界，會隨著生命的意思，逐漸聚合回到這個生命體。"
+  },
+  "raw_len": 269,
+  "json_ok": true,
+  "sec": 2.05
+ },
+ "slide_040": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主體為教材內容，佈景中的文字是為了講解而製作的。",
+   "slide_text": "追求法意的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實現精勤的…\n"
+  },
+  "raw_len": 143,
+  "json_ok": true,
+  "sec": 1.42
+ },
+ "slide_041": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現的是生長發育的流程圖，包含多個階段的圖像和文字說明。",
+   "slide_text": "Fertilized\n egg\nCleavage\nBlastocyst\nImplantation\nuterine wall\nGastrulation\nTurning\nOrganogenesis\nFetal growth and development\nBirth\nAdult\npolar bodies"
+  },
+  "raw_len": 257,
+  "json_ok": true,
+  "sec": 1.36
+ },
+ "slide_042": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面中存在佈景上的裝飾文字，而非講者所使用的投影片。",
+   "slide_text": "\n追求法喜的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實現精勤的努力"
+  },
+  "raw_len": 144,
+  "json_ok": true,
+  "sec": 1.35
+ },
+ "slide_043": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現的是胎兒模型和標籤，是教材內容。",
+   "slide_text": "意導線 氣成形\n先天之氣 : 腎氣"
+  },
+  "raw_len": 103,
+  "json_ok": true,
+  "sec": 1.1
+ },
+ "slide_044": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面上的文字是背景佈景，而非講經影片的投影片內容。",
+   "slide_text": "追求法喜的身體健康\n創造通達的人際關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實現精勤的目的\n一切預備的"
+  },
+  "raw_len": 148,
+  "json_ok": true,
+  "sec": 1.32
+ },
+ "slide_045": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面主要為講經內容，包含文字、標題和重點。",
+   "slide_text": "<<三月陽神為三魂，動而生也》\n(動: 種子能夠動了) (養元成)\n天魂(未來種子)、地魂(過去種子)、人魂(能行的種子)。\n何期邪謹的種子全部搬家完成。\n\n這個生命已經能夠動了念頭， 這個生命又要任何意念的萌起， 當下種子就會產生東西，也可以說， 這個沒有完整身體的生命， 已經具備萌發意念的能力(種子有現行力道)。\n\n以佛法來說就是識蘊應化【識蘊成】"
+  },
+  "raw_len": 270,
+  "json_ok": true,
+  "sec": 1.98
+ },
+ "slide_046": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面中包含講者鏡頭和背景佈景，而非教材內容。",
+   "slide_text": "\n追求法意的身體健康\n創造通達的入隙關係\n經營和諧的圓滿家庭\n建立利益眾生的事業\n實踐規範的理想\n追求精勤的智慧"
+  },
+  "raw_len": 149,
+  "json_ok": true,
+  "sec": 1.41
+ },
+ "slide_047": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現的是講者在白板上書寫的問題。",
+   "slide_text": "問題： 為何小產太多在3月以前？"
+  },
+  "raw_len": 99,
+  "json_ok": true,
+  "sec": 1.13
+ },
+ "slide_048": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面中包含佈景文字，而非講經內容。",
+   "slide_text": "👍 打閲讀方法出門"
+  },
+  "raw_len": 91,
+  "json_ok": true,
+  "sec": 1.02
+ },
+ "slide_049": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "畫面呈現的是講義封面，包含文字和圖標。",
+   "slide_text": "\n燈方便\n\n\n\n訂閱播放法門"
+  },
+  "raw_len": 103,
+  "json_ok": true,
+  "sec": 1.09
+ }
+}
