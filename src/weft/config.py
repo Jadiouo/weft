@@ -56,13 +56,19 @@ class S1bConfig(StageConfig):
     #: speaker/slide 二分類
     face_detector: str = "yunet"
     face_min_area_ratio: float = 0.04  # 滿版人臉的下限面積佔比
-    #: HMM 換頁偵測（§4.3 步驟 4）——以「投影片會停留一段時間」為先驗
+    #: HMM 換頁偵測（§4.3 步驟 4）——以「投影片會停留一段時間」為先驗。
+    #: 0.97 對應幾何分布平均停留 ~33 幀，在 1fps 下即 ~33 秒，與 §5.1 的
+    #: 「每頁停留 30–120 秒」相符。
     hmm_self_transition: float = 0.97
-    hmm_emission_scale: float = 12.0
+    #: 「同一頁」基線離散度的下限，作用在**尺度無關**的 ink Jaccard 上：
+    #: 語意為「換頁至少會改變這個比例的 ink 圖樣」。沒有它，完全沒換頁的
+    #: 影片（對抗樣本 A4）會把量化雜訊當成離群值。見 docs/decisions.md D7。
+    min_ink_change: float = 0.01
     min_slide_duration_sec: float = 3.0
-    #: 逐條動畫合併（§4.3 步驟 5）
+    #: 逐條動畫合併（§4.3 步驟 5）。0.70 取自實測分離區間：
+    #: build 的 containment 0.86–0.98，真正換頁 ≤0.56。見 decisions.md D8。
     progressive_merge: bool = True
-    progressive_containment_ratio: float = 0.85
+    progressive_containment_ratio: float = 0.70
 
 
 class S2Config(StageConfig):

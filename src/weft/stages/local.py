@@ -6,12 +6,15 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from ..config import Config
 from ..ir import CandidateSet, Lexicon, Segment, Slide, Transcript, VideoMeta
 from ..paths import WorkPaths
 from . import pending
+
+log = logging.getLogger(__name__)
 
 
 def s0_fetch(video_id: str, cfg: Config, work: WorkPaths) -> VideoMeta:
@@ -57,22 +60,98 @@ def s1b_slides(cfg: Config, work: WorkPaths) -> tuple[CandidateSet, list[Slide]]
     """S1b 投影片候選幀。SDD §4.3。移植 vid2slides 演算法，不 fork 該 repo。
 
     冪等鍵：video_id + fps + detector_params_hash
-    失敗行為：偵測到 0 張投影片 → mode=transcript_only，不中斷
+    失敗行為：偵測到 0 張投影片 → mode=transcript_only，不中斷（見 §4.3）
     """
-    pending(
-        "S1b 投影片候選幀",
-        "§4.3",
-        "Phase 1",
-        [
-            "ffmpeg 每 1 秒抽一幀縮圖",
-            "speaker/slide 二分類：偵測滿版人臉（本素材硬切、無 PiP）",
-            "slide 幀降解析度至短邊 ~180px + 高斯模糊，壓制雷射筆紅點（對抗樣本 A4）",
-            "HMM 換頁偵測，以「投影片會停留一段時間」為先驗，避免手調門檻",
-            "逐條動畫合併：後段 OCR 文字包含前段則視為同頁 build，取最後一幀（A2，門檻 1.00）",
-            "每個穩定段落輸出一張 03_slides/slide_NNN.png",
-            "禁止：固定間隔取樣冒充換頁偵測、跳過分類把所有幀當投影片（§5.5 #1、#2）",
+    import shutil
+
+    import cv2
+
+    from ..ir import CandidateSet, FrameClass, FrameLabel, Slide, SlideCandidate
+    from .detect import Run, detect_sections, drop_short_sections, split_runs
+    from .frames import extract_frames, load_frames
+
+    p = cfg.s1b
+    fps = p.fps
+
+    paths = extract_frames(work.video, work.frames_dir, fps)
+    if not paths:
+        raise RuntimeError(f"{work.video} 抽不出任何幀")
+
+    frames = load_frames(paths, fps, p.downscale_short_side, p.blur_sigma, p.face_min_area_ratio)
+    duration = len(frames) / fps
+
+    # 每個 slide 段落內各自偵測換頁。speaker 段落不參與——SDD §4.3 把分類排在
+    # 偵測之前是有原因的：實測顯示講者的輕微晃動（ink Jaccard 可達 0.4）比
+    # 部分真實換頁還大，混在一起會淹掉訊號。
+    sections = []
+    for run in split_runs(frames):
+        if run.is_speaker:
+            continue
+        found = detect_sections(
+            frames, run, p.hmm_self_transition, p.min_ink_change,
+            p.progressive_containment_ratio, p.progressive_merge,
+        )
+        sections += drop_short_sections(found, frames, p.min_slide_duration_sec, fps)
+
+    half = 0.5 / fps  # 幀時間戳取的是每格中心，還原成格的邊界
+    candidates: list[SlideCandidate] = []
+    slides: list[Slide] = []
+    if work.slides_dir.exists():
+        shutil.rmtree(work.slides_dir)
+    work.slides_dir.mkdir(parents=True, exist_ok=True)
+
+    for i, section in enumerate(sections):
+        t_start = max(0.0, frames[section.start].t - half)
+        t_end = min(duration, frames[section.end - 1].t + half)
+        key = frames[section.keyframe]
+        build_times = [frames[b].t for b in section.build_indices]
+
+        candidates.append(
+            SlideCandidate(
+                index=i,
+                t_start=t_start,
+                t_end=t_end,
+                keyframe_t=key.t,
+                build_frames=build_times if section.is_progressive else [],
+            )
+        )
+
+        image = work.slide_image(i + 1)
+        # 存原始解析度的那一幀，不是偵測用的 180px 縮圖——這張要送去 OCR 與 VLM
+        img = cv2.imread(str(key.path))
+        cv2.imwrite(str(image), img)
+        slides.append(
+            Slide(
+                slide_id=f"slide_{i + 1:03d}",
+                image_path=str(image.relative_to(work.dir)),
+                t_first_seen=t_start,
+                t_last_seen=t_end,
+                is_progressive_final=section.is_progressive,
+                build_frames=build_times if section.is_progressive else [],
+            )
+        )
+
+    candidate_set = CandidateSet(
+        video_id=work.video_id,
+        fps=fps,
+        duration=duration,
+        frames=[
+            FrameLabel(
+                t=f.t,
+                frame_class=FrameClass.SPEAKER if f.is_speaker else FrameClass.SLIDE,
+                face_score=min(1.0, f.face_area_ratio),
+                frame_path=str(f.path.relative_to(work.dir)) if f.path else None,
+            )
+            for f in frames
         ],
+        candidates=candidates,
+        params_hash=p.params_hash(),
     )
+    work.candidates.write_text(candidate_set.model_dump_json(indent=2), encoding="utf-8")
+
+    if not slides:
+        log.warning("%s 偵測到 0 張投影片，將以 transcript_only 模式繼續（§4.3）", work.video_id)
+    return candidate_set, slides
 
 
 def s2_ocr(cfg: Config, work: WorkPaths, slides: list[Slide]) -> list[Slide]:

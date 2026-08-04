@@ -39,7 +39,7 @@ pytestmark = pytest.mark.e2e
     ["A1_standard", "A2_progressive", "A3_speaker_only", "A4_laser_pointer",
      "A5_embedded_video", "A6_interleaved", "A7_backtrack"],
 )
-def test_slide_detection_meets_synthetic_f1_threshold(synth_dir, cfg: Config, scenario_name):
+def test_slide_detection_meets_synthetic_f1_threshold(synth_work, cfg: Config, scenario_name):
     """§5.2：合成影片的換頁偵測 boundary F1 ≥ 0.95（容忍 ±2 秒）。
 
     §5.5 #7：**不得為了讓測試通過而調低此門檻。**
@@ -49,23 +49,23 @@ def test_slide_detection_meets_synthetic_f1_threshold(synth_dir, cfg: Config, sc
     from weft.validation.metrics import boundary_prf
 
     truth = BY_NAME[scenario_name]
-    work = WorkPaths(synth_dir, scenario_name)
+    candidates, _slides = s1b_slides(cfg, WorkPaths(synth_work, scenario_name))
 
-    candidates, _slides = s1b_slides(cfg, work)  # 目前會 raise StageNotImplemented
-
-    predicted = [c.t_start for c in candidates.candidates if c.index > 0]
+    predicted = _internal_boundaries(candidates, truth.duration)
     prf = boundary_prf(predicted, truth.slide_boundaries, BOUNDARY_TOLERANCE_SEC)
-    assert prf.f1 >= BOUNDARY_F1_SYNTHETIC, f"{scenario_name}：{prf}"
+    assert prf.f1 >= BOUNDARY_F1_SYNTHETIC, (
+        f"{scenario_name}：{prf}\n  pred={predicted}\n  gt  ={truth.slide_boundaries}"
+    )
 
 
 @pytest.mark.synth
-def test_progressive_animation_merges_into_one_slide(synth_dir, cfg: Config):
+def test_progressive_animation_merges_into_one_slide(synth_work, cfg: Config):
     """§5.2：逐條動畫合併正確率 = 1.00（對抗樣本 A2）。這是設計目標，不容失敗。"""
     from tests.synth.scenarios import A2
     from weft.stages.local import s1b_slides
     from weft.validation.metrics import merge_accuracy
 
-    _candidates, slides = s1b_slides(cfg, WorkPaths(synth_dir, A2.name))
+    _candidates, slides = s1b_slides(cfg, WorkPaths(synth_work, A2.name))
 
     # 每個 slide 邏輯頁面實際被偵測成幾張
     detected = _count_slides_per_page(slides, A2)
@@ -73,7 +73,7 @@ def test_progressive_animation_merges_into_one_slide(synth_dir, cfg: Config):
 
 
 @pytest.mark.synth
-def test_progressive_keyframe_is_the_most_complete_frame(synth_dir, cfg: Config):
+def test_progressive_keyframe_is_the_most_complete_frame(synth_work, cfg: Config):
     """§4.3 步驟 5：逐條動畫取**最後一幀**（內容最完整）。
 
     只驗證張數是不夠的——取到第一幀同樣是 1 張，但內容缺了 5/6。
@@ -81,7 +81,7 @@ def test_progressive_keyframe_is_the_most_complete_frame(synth_dir, cfg: Config)
     from tests.synth.scenarios import A2
     from weft.stages.local import s1b_slides
 
-    _candidates, slides = s1b_slides(cfg, WorkPaths(synth_dir, A2.name))
+    _candidates, slides = s1b_slides(cfg, WorkPaths(synth_work, A2.name))
 
     build = next(p for p in A2.placed if p.page.build_offsets)
     window = build.keyframe_window
@@ -92,25 +92,25 @@ def test_progressive_keyframe_is_the_most_complete_frame(synth_dir, cfg: Config)
 
 
 @pytest.mark.synth
-def test_speaker_slide_classification_accuracy(synth_dir, cfg: Config):
+def test_speaker_slide_classification_accuracy(synth_work, cfg: Config):
     """§5.2：speaker/slide 分類 accuracy ≥ 0.95。"""
     from tests.synth.scenarios import A6
     from weft.stages.local import s1b_slides
     from weft.validation.metrics import classification_accuracy
 
-    candidates, _slides = s1b_slides(cfg, WorkPaths(synth_dir, A6.name))
+    candidates, _slides = s1b_slides(cfg, WorkPaths(synth_work, A6.name))
 
     predicted = [str(f.frame_class) for f in candidates.frames]
     assert classification_accuracy(predicted, A6.frame_classes()) >= FRAME_CLASS_ACCURACY
 
 
 @pytest.mark.synth
-def test_speaker_only_video_yields_zero_slides(synth_dir, cfg: Config):
+def test_speaker_only_video_yields_zero_slides(synth_work, cfg: Config):
     """A3：純講者必須偵測為 0 頁，且**不中斷**——退化為 mode=transcript_only（§4.3）。"""
     from tests.synth.scenarios import A3
     from weft.stages.local import s1b_slides
 
-    _candidates, slides = s1b_slides(cfg, WorkPaths(synth_dir, A3.name))
+    _candidates, slides = s1b_slides(cfg, WorkPaths(synth_work, A3.name))
     assert slides == []
 
 
@@ -226,10 +226,11 @@ def test_unimplemented_stages_report_what_is_missing(cfg: Config, tmp_path):
     from weft.stages import cloud, local
 
     work = WorkPaths(tmp_path, "dummy")
+    # 已實作的階段從這裡移除——清單本身就是進度表。
+    # 已完成：S1b（§4.3，Phase 1）
     cases = [
         ("S0", lambda: local.s0_fetch("v", cfg, work), "§4.1"),
         ("S1a", lambda: local.s1a_transcript(cfg, work), "§4.2"),
-        ("S1b", lambda: local.s1b_slides(cfg, work), "§4.3"),
         ("S2", lambda: local.s2_ocr(cfg, work, []), "§4.4"),
         ("S2b", lambda: local.s2b_lexicon(cfg, work, [], None), "§4.4"),
         ("S2c", lambda: local.s2c_correct(cfg, work, None, None), "§4.5"),
@@ -247,6 +248,19 @@ def test_unimplemented_stages_report_what_is_missing(cfg: Config, tmp_path):
         assert section in message, f"{stage} 的錯誤訊息未指出 SDD 章節"
         assert "Phase" in message, f"{stage} 的錯誤訊息未指出所屬 Phase"
         assert "待實作" in message, f"{stage} 的錯誤訊息未列出待實作項目"
+
+
+def _internal_boundaries(candidates, duration: float) -> list[float]:
+    """從候選段落推導出「投影片段落的起訖時刻」，去掉影片頭尾。
+
+    與 SynthTruth.slide_boundaries 的定義必須一致——slide↔speaker 的切換
+    同樣算邊界（A6 的四個邊界全部來自這裡）。
+    """
+    marks = set()
+    for c in candidates.candidates:
+        marks.add(round(c.t_start, 3))
+        marks.add(round(c.t_end, 3))
+    return sorted(m for m in marks if 0.5 < m < duration - 0.5)
 
 
 def _count_slides_per_page(slides, truth) -> list[int]:

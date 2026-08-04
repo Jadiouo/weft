@@ -20,6 +20,23 @@ def synth_dir() -> Path:
     return SYNTH_DIR
 
 
+@pytest.fixture(scope="session")
+def synth_work(synth_dir: Path, tmp_path_factory) -> Path:
+    """把合成影片擺成 SDD §3.1 的 work/ 佈局，讓階段函式能照正式路徑跑。
+
+    抽幀結果在 session 範圍內共用——每個場景抽一次要數秒，七個場景乘上
+    多條測試會讓跑一次測試變成分鐘級，而**沒人想跑的測試等於沒有測試**。
+    """
+    from weft.paths import WorkPaths
+
+    root = tmp_path_factory.mktemp("synth_work")
+    for video in sorted(synth_dir.glob("*.mp4")):
+        work = WorkPaths(root, video.stem)
+        work.ensure_dirs()
+        work.video.symlink_to(video.resolve())
+    return root
+
+
 @pytest.fixture
 def cfg() -> Config:
     return Config()

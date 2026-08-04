@@ -28,12 +28,24 @@ FFPROBE = "ffprobe"
 #: 超過就代表 ground truth 是錯的——那比偵測演算法出錯更嚴重，必須擋下。
 DURATION_TOLERANCE_SEC = 0.5
 
+#: crf 30 而非預設的 23：真實 YouTube 講經影片是重壓縮的，塊狀瑕疵與色帶
+#: 都會抬高幀間距離的基線。用高畫質合成素材測出來的 F1 會虛高——實測未加
+#: 雜訊前，多數相鄰幀是**像素完全相同**的，那對偵測器毫無挑戰。
 _ENCODE = [
     "-c:v", "libx264",
     "-preset", "veryfast",
-    "-crf", "23",
+    "-crf", "30",
     "-pix_fmt", "yuv420p",
 ]
+
+#: 疊加在靜態畫面上的干擾。ground truth 不變（換頁時刻由場景定義決定），
+#: 變的只是「這題有多難」。
+#:   noise    感測器／壓縮雜訊
+#:   亮度浮動 攝影機自動曝光、投影機燈源、會場燈光變化
+_REALISM = (
+    "noise=alls=6:allf=t+u,"
+    "eq=brightness='0.012*sin(2*PI*t/11)':contrast='1+0.015*sin(2*PI*t/7)'"
+)
 
 
 def _run(args: list[str]) -> None:
@@ -65,12 +77,12 @@ def _laser_filter(w: int, h: int) -> str:
 
 
 def _encode_static(png: Path, duration: float, out: Path, truth: SynthTruth, vf: str | None = None) -> None:
-    chain = vf or "null"
+    chain = f"{vf}," if vf else ""
     _run([
         FFMPEG, "-y", "-loglevel", "error",
         "-loop", "1", "-framerate", str(truth.fps), "-i", str(png),
         "-t", f"{duration:.3f}",
-        "-vf", f"{chain},fps={truth.fps},format=yuv420p",
+        "-vf", f"{chain}{_REALISM},fps={truth.fps},format=yuv420p",
         *_ENCODE, str(out),
     ])
 
@@ -84,7 +96,7 @@ def _encode_speaker(png: Path, duration: float, out: Path, truth: SynthTruth) ->
         FFMPEG, "-y", "-loglevel", "error",
         "-loop", "1", "-framerate", str(truth.fps), "-i", str(png),
         "-t", f"{duration:.3f}",
-        "-vf", f"crop={w}:{h}:x={x}:y={y},fps={truth.fps},format=yuv420p",
+        "-vf", f"crop={w}:{h}:x={x}:y={y},{_REALISM},fps={truth.fps},format=yuv420p",
         *_ENCODE, str(out),
     ])
 
@@ -100,7 +112,7 @@ def _encode_embedded(png: Path, duration: float, out: Path, truth: SynthTruth) -
         "-f", "lavfi", "-i", f"testsrc2=size={box_w}x{box_h}:rate={truth.fps}",
         "-t", f"{duration:.3f}",
         "-filter_complex",
-        f"[0:v][1:v]overlay=x={px}:y={py}:shortest=0,fps={truth.fps},format=yuv420p",
+        f"[0:v][1:v]overlay=x={px}:y={py}:shortest=0,{_REALISM},fps={truth.fps},format=yuv420p",
         *_ENCODE, str(out),
     ])
 
