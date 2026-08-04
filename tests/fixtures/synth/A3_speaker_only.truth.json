@@ -1,0 +1,24 @@
+{
+  "name": "A3_speaker_only",
+  "description": "純講者無投影片（靜態人像 + 輕微晃動）",
+  "expectation": "偵測為 0 頁",
+  "duration": 120,
+  "fps": 5,
+  "width": 1280,
+  "height": 720,
+  "slide_boundaries": [],
+  "expected_slide_count": 0,
+  "expected_merge_counts": [],
+  "pages": [
+    {
+      "index": 0,
+      "label": "speaker",
+      "kind": "speaker",
+      "t_start": 0.0,
+      "t_end": 120.0,
+      "expected_slides": 0,
+      "build_times": [],
+      "keyframe_window": null
+    }
+  ]
+}

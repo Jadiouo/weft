@@ -1,0 +1,61 @@
+{
+  "name": "A2_progressive",
+  "description": "逐條動畫，一頁分 6 次疊加出現",
+  "expectation": "偵測為 1 頁，取最後一幀",
+  "duration": 108,
+  "fps": 5,
+  "width": 1280,
+  "height": 720,
+  "slide_boundaries": [
+    30.0,
+    78.0
+  ],
+  "expected_slide_count": 3,
+  "expected_merge_counts": [
+    1,
+    1,
+    1
+  ],
+  "pages": [
+    {
+      "index": 0,
+      "label": "before",
+      "kind": "slide",
+      "t_start": 0.0,
+      "t_end": 30.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 1,
+      "label": "build_page",
+      "kind": "slide",
+      "t_start": 30.0,
+      "t_end": 78.0,
+      "expected_slides": 1,
+      "build_times": [
+        30.0,
+        38.0,
+        46.0,
+        54.0,
+        62.0,
+        70.0
+      ],
+      "keyframe_window": [
+        70.0,
+        78.0
+      ]
+    },
+    {
+      "index": 2,
+      "label": "after",
+      "kind": "slide",
+      "t_start": 78.0,
+      "t_end": 108.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    }
+  ]
+}

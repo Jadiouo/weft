@@ -1,0 +1,75 @@
+{
+  "name": "A1_standard",
+  "description": "標準整頁換頁，每頁停留 30–120 秒",
+  "expectation": "全部正確偵測",
+  "duration": 295,
+  "fps": 5,
+  "width": 1280,
+  "height": 720,
+  "slide_boundaries": [
+    30.0,
+    90.0,
+    135.0,
+    255.0
+  ],
+  "expected_slide_count": 5,
+  "expected_merge_counts": [
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "pages": [
+    {
+      "index": 0,
+      "label": "p1",
+      "kind": "slide",
+      "t_start": 0.0,
+      "t_end": 30.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 1,
+      "label": "p2",
+      "kind": "slide",
+      "t_start": 30.0,
+      "t_end": 90.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 2,
+      "label": "p3",
+      "kind": "slide",
+      "t_start": 90.0,
+      "t_end": 135.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 3,
+      "label": "p4",
+      "kind": "slide",
+      "t_start": 135.0,
+      "t_end": 255.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 4,
+      "label": "p5",
+      "kind": "slide",
+      "t_start": 255.0,
+      "t_end": 295.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    }
+  ]
+}

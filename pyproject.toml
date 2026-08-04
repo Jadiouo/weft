@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "weft"
+version = "0.1.0"
+description = "講經影片 → 向量知識庫 pipeline（見 SDD.md）"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "numpy>=1.26",
+    "pillow>=10.0",
+    # 上限刻意鎖 <5：OpenCV 5.0 移除了 CascadeClassifier，且 PaddleOCR（S2）
+    # 生態仍綁 4.x。放寬前請先驗證 S1b 與 S2。
+    "opencv-python-headless>=4.10,<5",
+]
+
+[project.optional-dependencies]
+gpu = [
+    "faster-whisper>=1.0",
+    "sentence-transformers>=3.0",
+    "paddleocr",
+]
+dev = ["pytest>=8.0", "rich>=13.0"]
+
+[project.scripts]
+weft = "weft.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]
+addopts = "-ra --strict-markers"
+markers = [
+    # SDD §5.5 #10：e2e 不得用 mock 取代真實模型呼叫；單元測試可 mock，
+    # 但檔名須含 `_unit_`。這個規範由 test_unit_conventions.py 強制執行。
+    "e2e: 端到端測試，實際跑通完整階段，不得 mock 模型",
+    "synth: 需要合成測試影片（首次執行會用 ffmpeg 產生，約 1 分鐘）",
+    "gpu: 需要 CUDA 與 pipe-gpu 環境",
+    "quota: 會消耗 Gemini API 額度",
+    "golden: 需要真實影片黃金集（SDD §5.1 B）",
+]

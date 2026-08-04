@@ -1,0 +1,51 @@
+{
+  "name": "A5_embedded_video",
+  "description": "投影片內嵌播放的短影片",
+  "expectation": "不切成數十頁",
+  "duration": 100,
+  "fps": 5,
+  "width": 1280,
+  "height": 720,
+  "slide_boundaries": [
+    20.0,
+    80.0
+  ],
+  "expected_slide_count": 3,
+  "expected_merge_counts": [
+    1,
+    1,
+    1
+  ],
+  "pages": [
+    {
+      "index": 0,
+      "label": "p1",
+      "kind": "slide",
+      "t_start": 0.0,
+      "t_end": 20.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 1,
+      "label": "p2",
+      "kind": "slide",
+      "t_start": 20.0,
+      "t_end": 80.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 2,
+      "label": "p3",
+      "kind": "slide",
+      "t_start": 80.0,
+      "t_end": 100.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    }
+  ]
+}

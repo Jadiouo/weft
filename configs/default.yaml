@@ -1,0 +1,119 @@
+# weft 預設設定。所有值都與 src/weft/config.py 的 default 相同——
+# 這個檔案存在是為了讓可調參數一目了然，不是為了覆寫。
+#
+# 注意：SDD §5.2 的**驗收門檻不在這裡**，也不能放進來。
+# 門檻寫死在 src/weft/validation/thresholds.py（§5.5 #7）。
+
+work_dir: work
+out_dir: out
+log_level: INFO
+
+# S0 取得（§4.1）
+s0:
+  video_format: "bestvideo[height<=1080]+bestaudio/best[height<=1080]"
+  caption_langs: ["zh-TW", "zh-Hant", "zh", "zh-CN"]
+  prefer_manual_caption: true
+  write_auto_caption: true
+  rate_limit: null
+
+# S1a 逐字稿（§4.2）
+s1a:
+  whisper_model: large-v3
+  device: cuda
+  compute_type: float16
+  language: zh
+  beam_size: 5
+  vad_filter: true
+  # 把系列術語詞庫餵進 initial_prompt，緩解文言文 ASR 問題（§9）
+  use_lexicon_prompt: true
+  lexicon_prompt_max_terms: 40
+
+# S1b 投影片候選幀（§4.3）
+s1b:
+  fps: 1.0
+  # 降解析度 + 模糊，壓制雷射筆紅點與壓縮雜訊（對抗樣本 A4）
+  downscale_short_side: 180
+  blur_sigma: 2.0
+  face_detector: yunet
+  face_min_area_ratio: 0.04
+  # HMM：以「投影片會停留一段時間」為先驗，避免手調門檻
+  hmm_self_transition: 0.97
+  hmm_emission_scale: 12.0
+  min_slide_duration_sec: 3.0
+  # 逐條動畫合併（對抗樣本 A2，門檻 1.00）
+  progressive_merge: true
+  progressive_containment_ratio: 0.85
+
+# S2 OCR（§4.4）
+s2:
+  ocr_model: PaddleOCR-VL
+  lang: ch
+  use_gpu: false
+
+# S2b 術語詞庫（§4.4）。scope 為系列級，不是單片級。
+s2b:
+  term_min_len: 2
+  term_max_len: 6
+  min_count: 1
+  bracket_extraction: true
+
+# S2c 逐字稿術語校正（§4.5）。品質關鍵路徑，不是可選功能。
+s2c:
+  similarity_threshold: 0.85
+  # 只在時間鄰近的投影片詞庫中比對，避免用第 40 分鐘的術語改第 5 分鐘的話
+  neighbor_window: 2
+  pinyin_weight: 0.7
+  shape_weight: 0.3
+
+# S3 對齊（§4.6）。這一步不呼叫 LLM。
+s3:
+  embedding_model: BAAI/bge-m3
+  device: cuda
+  # 吸附範圍硬限制。放大此值等同繞過 §4.6 的設計約束。
+  snap_window_sec: 20.0
+  min_segment_sec: 5.0
+
+# S4 聯合理解（§4.7）。唯一花額度的階段。
+s4:
+  model: gemini-2.5-flash-lite
+  prompt_version: v1
+  batch_segments: 3
+  prev_summary_max_chars: 200
+  max_retries: 2
+  retry_backoff_sec: 4.0
+  # §5.5 #6：額度耗盡時不得靜默改用本地模型。
+  # 本地 fallback 必須是明確開關，且輸出須標記 model_used。
+  allow_local_fallback: false
+  local_fallback_model: Qwen/Qwen3-VL-8B-Instruct
+
+s5:
+  model: gemini-2.5-flash-lite
+  prompt_version: v1
+
+# S6 渲染（§4.9）
+s6:
+  max_chunk_chars: 800
+  write_debug_markdown: true
+
+# 額度（§6.1、§6.2）
+quota:
+  # 主動節流水位。超過即停止本日處理，不靠撞 429（§5.5 #13）。
+  safety_ratio: 0.9
+  requests_per_day: 1000
+  # RPD 於太平洋時間午夜重置。用 zoneinfo 計算，不寫死時差。
+  reset_timezone: America/Los_Angeles
+
+# 溯源檢查（§5.4）。這些是「檢查怎麼跑」的參數，
+# 不是驗收門檻——通過率 ≥ 0.95 在 thresholds.py。
+provenance:
+  # bigram containment 門檻。0.25 取自實測分離區間，見 docs/decisions.md D1。
+  min_similarity: 0.25
+  # 反向檢查：逐字複製率（LCS 比率）
+  copy_similarity: 0.98
+  # 各型別允許的高複製率 block 比例上限。經文原文本來就該是引文。
+  max_copy_ratio:
+    經文原文: 1.0
+    圖表描述: 0.5
+    白話解說: 0.8
+    口頭延伸: 0.8
+  check_named_entities: true

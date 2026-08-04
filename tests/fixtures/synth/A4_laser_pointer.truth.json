@@ -1,0 +1,26 @@
+{
+  "name": "A4_laser_pointer",
+  "description": "移動紅點疊加在靜態投影片上",
+  "expectation": "偵測為 1 頁（紅點不觸發換頁）",
+  "duration": 90,
+  "fps": 5,
+  "width": 1280,
+  "height": 720,
+  "slide_boundaries": [],
+  "expected_slide_count": 1,
+  "expected_merge_counts": [
+    1
+  ],
+  "pages": [
+    {
+      "index": 0,
+      "label": "p1",
+      "kind": "slide",
+      "t_start": 0.0,
+      "t_end": 90.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    }
+  ]
+}

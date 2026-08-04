@@ -1,0 +1,73 @@
+{
+  "name": "A6_interleaved",
+  "description": "講者頁與投影片頁交錯出現",
+  "expectation": "分類正確，投影片頁數正確",
+  "duration": 115,
+  "fps": 5,
+  "width": 1280,
+  "height": 720,
+  "slide_boundaries": [
+    25.0,
+    45.0,
+    75.0,
+    90.0
+  ],
+  "expected_slide_count": 3,
+  "expected_merge_counts": [
+    1,
+    1,
+    1
+  ],
+  "pages": [
+    {
+      "index": 0,
+      "label": "s1",
+      "kind": "slide",
+      "t_start": 0.0,
+      "t_end": 25.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 1,
+      "label": "k1",
+      "kind": "speaker",
+      "t_start": 25.0,
+      "t_end": 45.0,
+      "expected_slides": 0,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 2,
+      "label": "s2",
+      "kind": "slide",
+      "t_start": 45.0,
+      "t_end": 75.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 3,
+      "label": "k2",
+      "kind": "speaker",
+      "t_start": 75.0,
+      "t_end": 90.0,
+      "expected_slides": 0,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 4,
+      "label": "s3",
+      "kind": "slide",
+      "t_start": 90.0,
+      "t_end": 115.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "name": "A7_backtrack",
+  "description": "回放：講者退回前一頁再前進",
+  "expectation": "偵測為 3 次切換（非 2 次）",
+  "duration": 115,
+  "fps": 5,
+  "width": 1280,
+  "height": 720,
+  "slide_boundaries": [
+    30.0,
+    60.0,
+    85.0
+  ],
+  "expected_slide_count": 4,
+  "expected_merge_counts": [
+    1,
+    1,
+    1,
+    1
+  ],
+  "pages": [
+    {
+      "index": 0,
+      "label": "p1",
+      "kind": "slide",
+      "t_start": 0.0,
+      "t_end": 30.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 1,
+      "label": "p2",
+      "kind": "slide",
+      "t_start": 30.0,
+      "t_end": 60.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 2,
+      "label": "p1_again",
+      "kind": "slide",
+      "t_start": 60.0,
+      "t_end": 85.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    },
+    {
+      "index": 3,
+      "label": "p2_again",
+      "kind": "slide",
+      "t_start": 85.0,
+      "t_end": 115.0,
+      "expected_slides": 1,
+      "build_times": [],
+      "keyframe_window": null
+    }
+  ]
+}

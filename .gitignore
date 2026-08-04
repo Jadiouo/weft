@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+
+# 產物與中介檔（SDD §3.1）
+work/
+out/
+
+# 合成測試影片：由 tests/synth/build.py 產生，15 秒可重建，不進版控
+tests/fixtures/synth/*.mp4
+
+# 真實影片黃金集：素材為他人著作（SDD §9 版權），只版控標註檔
+tests/fixtures/golden/*.mp4
+tests/fixtures/golden/*.webm
