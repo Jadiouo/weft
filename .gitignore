@@ -20,3 +20,14 @@ experiments/r8_overlay/sheets/
 experiments/r8_overlay/runs/
 experiments/r8_overlay/residual.json
 experiments/r8_overlay/split.json
+
+# 金鑰與本機環境。SDD §2.3：額度來源固定為 Gemini API key。
+# key 應走環境變數（~/.bashrc），不要放進專案目錄——備份、同步工具、
+# 誤複製目錄都可能把它帶出去。這些規則是萬一有人還是建了檔案時的防護。
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets.json
+credentials.json
