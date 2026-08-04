@@ -85,7 +85,18 @@ def longest_common_substring_ratio(candidate: str, source: str) -> float:
 _BOOK_TITLE = re.compile(r"《([^》]{1,30})》")
 _ARABIC_NUMBER = re.compile(r"\d+(?:\.\d+)?")
 _CJK_DIGITS = "零一二三四五六七八九十百千萬億兩"
-_CJK_NUMBER = re.compile(rf"[{_CJK_DIGITS}]{{1,8}}(?=[年月日歲個張條章卷篇位次倍分])")
+#: 數字後面的單位。**清單不完整就等於漏抓**——原本只有
+#: 「年月日歲個張條章卷篇位次倍分」，漏掉週／天／種／成／公分等常見單位，
+#: 導致「分為四種」「佔七成」「第五週」「二十一天」全部抓不到。
+#: R12 校準實測：補上後，口頭延伸的幻覺攔截率從 0/5 升到 3/5，**誤報零增加**。
+#:
+#: 多字單位放前面（`公分` 必須排在 `分` 之前），否則會被單字單位先吃掉。
+_CJK_UNITS = (
+    "公分|公尺|公里|公斤|公克|毫升|毫米|世紀|"
+    "年|月|日|時|分|秒|週|周|天|旬|季|"
+    "個|張|條|章|卷|篇|位|次|倍|種|類|項|點|步|層|級|成|度|歲|%|％"
+)
+_CJK_NUMBER = re.compile(rf"[{_CJK_DIGITS}]{{1,8}}(?=(?:{_CJK_UNITS}))")
 _YEAR = re.compile(rf"(?:\d{{2,4}}|[{_CJK_DIGITS}]{{1,6}})年")
 
 
@@ -191,9 +202,21 @@ def check_block(
     status = VerificationStatus.VERIFIED
     reason = ""
 
-    if sim < cfg.min_similarity:
+    # 來源長度比：擋「來源太短，撐不起這段內容」。containment 對多數型別
+    # 已停用（見 config 的說明），這是正向檢查僅存的實質作用。
+    source_ratio = (
+        len(re.sub(r"\s+", "", source)) / len(re.sub(r"\s+", "", block.text))
+        if block.text.strip() else 0.0
+    )
+
+    threshold = cfg.min_similarity_by_type.get(str(block.type), cfg.min_similarity)
+    if source_ratio < cfg.min_source_ratio:
         status = VerificationStatus.UNVERIFIED
-        reason = f"與來源相似度 {sim:.3f} < {cfg.min_similarity}"
+        reason = (f"來源長度僅 block 的 {source_ratio:.0%}"
+                  f"（下限 {cfg.min_source_ratio:.0%}），撐不起這段內容")
+    elif sim < threshold:
+        status = VerificationStatus.UNVERIFIED
+        reason = f"與來源相似度 {sim:.3f} < {threshold}（{block.type.value}）"
     elif missing:
         status = VerificationStatus.UNVERIFIED
         reason = f"具名實體未出現於來源：{missing}"

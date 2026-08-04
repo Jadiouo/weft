@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from weft.config import ProvenanceConfig
 from weft.ir import (
     ContentBlock,
@@ -285,3 +287,97 @@ def test_unsupported_entities_lists_only_missing_ones():
     text = "一月為胞，精血凝也，見於《雲笈七籤》。"
     missing = p.unsupported_entities(text, SLIDE)
     assert "雲笈七籤" in missing
+
+
+# --------------------------------------------------------------------------
+# R12 校準的結論（docs/decisions.md D17、D18）
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("分為四種", "四"),          # 種
+        ("佔七成以上", "七"),        # 成
+        ("第五週開始", "五"),        # 週
+        ("各需二十一天", "二十一"),  # 天
+        ("體長三公分", "三"),        # 公分（多字單位）
+        ("持續兩個月", "兩"),        # 個（原本就有）
+    ],
+)
+def test_named_entity_units_cover_common_measures(text, expected):
+    """單位清單不完整 = 永遠抓不到那些情形，而且**不會有任何測試變紅**。
+
+    原本的清單是「年月日歲個張條章卷篇位次倍分」，漏掉週／天／種／成／公分。
+    R12 校準時，口頭延伸的幻覺攔截率因此是 0/5；補上後升到 3/5。
+    """
+    assert expected in p.extract_named_entities(text).numbers
+
+
+def test_multi_character_units_are_matched_before_single_ones():
+    """`公分` 必須排在 `分` 之前。
+
+    regex 的交替是**最左優先**不是最長優先——若 `分` 排在前面，「三公分」
+    會被 `分` 匹配成功，位置對但語意錯（抽到的是「三公」後面的分）。
+    """
+    assert "三" in p.extract_named_entities("體長三公分").numbers
+
+
+def test_forward_threshold_is_per_content_type():
+    """§5.4 對反向檢查已明訂「依 type 分別設定範圍」，正向檢查原本卻只有
+    單一門檻——這是規格的不對稱，D17 補上。
+
+    門檻的高低反映的是**該型別與來源的關係有多緊密**，不是重要性：
+    引文逐字重疊、改寫部分重疊、口語摘要落差大、版面描述可能跨語言。
+    """
+    by_type = ProvenanceConfig().min_similarity_by_type
+    assert by_type["經文原文"] > by_type["白話解說"] > by_type["口頭延伸"]
+    assert by_type["圖表描述"] == 0.0, (
+        "圖表描述無法設下限——跨語言時忠實者本身就是 0.000"
+    )
+
+
+def test_scripture_still_has_a_meaningful_threshold():
+    """經文原文是唯一 containment 有鑑別力的型別（實測分離 7.50x），
+    它的門檻不該跟著其他型別一起放寬。"""
+    assert ProvenanceConfig().min_similarity_by_type["經文原文"] >= 0.5
+
+
+def test_expanded_paraphrase_of_terse_source_is_not_rejected():
+    """來源比 block 短時，containment 有數學上限——文言文簡短句被展開成
+    白話時必然如此。
+
+    實測案例：來源「意導氣 氣成形 / 先天之氣:腎氣」12 字 ≈ 11 bigram，
+    block 33 字 ≈ 32 bigram，理論上限只有 11/32 ≈ 0.34。
+    """
+    source = "意導氣 氣成形\n先天之氣:腎氣"
+    block = ContentBlock(
+        type=ContentType.VERNACULAR,
+        text="意念引導氣的運行，氣進而形成形體。在先天狀態下，這股氣被稱為腎氣。",
+        provenance=Provenance(kind=ProvenanceKind.SLIDE_OCR, ref="slide_001"),
+    )
+    verdict = p.check_block(block, source, cfg(), "s#1", 0)
+    assert verdict.similarity < 0.25, "此案例的 containment 本來就低，前提變了請重新檢視"
+    assert verdict.status is VerificationStatus.VERIFIED, (
+        "逐型別門檻應讓這種「展開簡短來源」的忠實改寫通過"
+    )
+
+
+def test_cross_language_description_is_not_rejected():
+    """跨語言時 containment 結構上必為 0——忠實與幻覺都是。
+
+    實測案例：投影片是英文（Cleavage / Blastocyst / Implantation），
+    block 是中文翻譯（卵裂／胚泡形成／著床）。這是 R12 校準中
+    圖表描述分離度為 0.00x 的主因之一。
+    """
+    source = "Fertilized egg\nCleavage\nBlastocyst\nImplantation\nGastrulation"
+    block = ContentBlock(
+        type=ContentType.FIGURE,
+        text="圖表展示受精卵發育的循環過程，包含卵裂、胚泡形成、著床與原腸胚形成等階段。",
+        provenance=Provenance(kind=ProvenanceKind.SLIDE_OCR, ref="slide_001"),
+    )
+    verdict = p.check_block(block, source, cfg(), "s#1", 0)
+    assert verdict.similarity == 0.0, "跨語言的 containment 應為 0；前提變了請重新檢視"
+    assert verdict.status is VerificationStatus.VERIFIED, (
+        "圖表描述的門檻應低到不誤殺跨語言的忠實翻譯"
+    )
