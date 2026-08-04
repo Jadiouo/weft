@@ -15,6 +15,10 @@ dependencies = [
     # v0.3 移除了人臉偵測與 PaddleOCR，鎖 <5 的兩個理由都消失了。
     # 仍保留上限是因為尚未在 5.x 上實測 S1b；放寬前請先跑 A1–A7。
     "opencv-python-headless>=4.10,<5",
+    # R13：只用於**驗證** VLM 回傳的術語校正是否真的同音／近音，
+    # 不用於產生校正。與 v0.2 被移除的那套「詞庫 → 拼音 → 比對」的
+    # 生成鏈是兩回事，見 docs/decisions.md D19。
+    "pypinyin>=0.51",
 ]
 
 [project.optional-dependencies]

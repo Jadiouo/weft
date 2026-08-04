@@ -131,16 +131,40 @@ SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的�
 
 ### 3. 對照投影片修正逐字稿的錯字（`corrections`）
 
-逐字稿來自語音辨識或字幕，專有術語常出現**同音錯字**。你同時看得到
-投影片上的正確寫法與逐字稿，請找出這類錯誤。
+逐字稿來自語音辨識或字幕，專有術語常出現**同音錯字**。請找出這類錯誤。
 
 每一筆填 `{"from": 逐字稿中的錯字, "to": 正確寫法, "reason": 理由}`。
 
-規則：
+**這一欄只處理一件事：把聽錯的字改成聽對的字。**
+判準是「講者嘴巴發出的音沒變，只是字寫錯了」。
+
+可以改：
+
+- 同音或近音的專名誤寫：`時運`→`識蘊`、`憍梵钵提`→`憍梵波提`、`涅盤`→`涅槃`
+- 音近漏字：`意地論`→`瑜伽師地論`、`學古學的`→`學古文學的`
+- 語音辨識造成的疊字：`家家當`→`家當`、`這這個`→`這個`
+- 被截斷的詞：`未`→`未來`（限後文已出現完整詞）
+
+**絕對不可以改**（以下每一種都會被系統自動退回）：
+
+- **補上講者沒說的字。** `陽神為三魂`→`陽神為三魂，動而生也` ✗
+  講者只唸了半句就是只唸了半句。投影片上有下半句**不是**補上去的理由。
+  逐字稿要忠實記錄講者說了什麼，不是記錄投影片寫了什麼。
+- **改事實。** `啟示經`→`創世記` ✗、`唐朝`→`宋朝` ✗、`三百年`→`五百年` ✗
+  講者講錯典故或年代，那是講者說的話。你的工作是聽寫正確，不是校訂內容。
+  講者的口誤若重要，寫進 `summary` 說明，不要動逐字稿。
+- **換成意思相近的別的詞。** `投胎轉世`→`十個月懷胎` ✗、`買房子`→`受精卵著床` ✗
+  發音完全不同就不是聽錯。把比喻換成本體、把代詞展開成詮釋，
+  都是 `content_blocks` 的工作，不是這一欄的。
+- **潤稿與格式化。** 刪贅詞 ✗、改大小寫 ✗、翻譯外來語 ✗
+  `沒sense`→`沒Sense` ✗、`好像很像`→`很像` ✗
+
+其他規則：
+
 - `from` 必須是**逐字稿中實際出現的字串**，一字不差
-- 只改**有把握**的：正確寫法出現在這張投影片上，且與錯字同音或近音
+- `to` 與 `from` 讀音要接近。系統會自動比對拼音，差太多的會被丟棄
 - **寧可漏改，不可亂改。** 講者本來就講對的詞不要動；一般用語不要動
-- 沒有要改的就回空陣列
+- 沒有要改的就回空陣列（多數段落都該是空的）
 
 ### 4. 理解與結構化（`summary`、`content_blocks`、`terms`）
 
@@ -282,8 +306,13 @@ def validate_corrections(raw: dict, segment) -> list:
     §5.3 不變量 10 要求每一筆的 `from` 字串實際出現在 `transcript_raw` 中。
     模型偶爾會回傳改寫過的片段（例如加了標點、或抄成了正確版本），那種
     校正無法套用也無法稽核，**丟掉並記錄**——不做模糊比對硬套上去。
+
+    R13 再加一道：不變量 10 只驗 `from`，驗不到 `to` 是否加了原文沒有的
+    內容。`unauthorized_reason` 擋掉插入與語意改寫，見
+    `weft.validation.corrections`。
     """
     from ..ir import Correction, CorrectionMethod
+    from ..validation.corrections import unauthorized_reason
 
     out: list = []
     seen: set[tuple[str, str]] = set()
@@ -295,6 +324,11 @@ def validate_corrections(raw: dict, segment) -> list:
         if from_text not in segment.transcript_raw:
             log.warning("%s：校正 %r→%r 的原字串不在逐字稿中，已丟棄（§5.3 不變量 10）",
                         segment.segment_id, from_text, to_text)
+            continue
+        reason = unauthorized_reason(from_text, to_text)
+        if reason is not None:
+            log.warning("%s：校正 %r→%r 超出授權，已丟棄（R13）——%s",
+                        segment.segment_id, from_text, to_text, reason)
             continue
         if (from_text, to_text) in seen:
             continue
