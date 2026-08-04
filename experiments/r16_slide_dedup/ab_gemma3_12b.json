@@ -1,0 +1,375 @@
+{
+ "A_classify_first:slide_001": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "純裝飾畫面",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 1.6
+ },
+ "A_classify_first:slide_002": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "醫方法門\n⊕",
+   "description": "畫面背景為雲霧繚繞的山景，前景中央以金黃色書寫著「醫方法門」四字，下方有一個紅色的圈圈符號。"
+  },
+  "sec": 2.0
+ },
+ "A_classify_first:slide_003": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "我們要明白一個基本邏輯\n\n現代醫學局部激觀\n問題難解\n身體故障總是許多\n沒道理檢視發生\n\n【醫】\n【骨】\n【學】\n【園】\n【規】",
+   "description": "畫面中央為講者，右側是背景投影片。投影片左側為直排中文文字，內容為「現代醫學局部激觀、問題難解、身體故障總是許多、沒道理檢視發生」。右側為四個大字：「醫」、「骨」、「學」、「園」，下方小字為「規」。畫面下方有標題「我們要明白一個基本邏輯」。背景投影片呈現模糊的書法風格，與講者形成對比。"
+  },
+  "sec": 3.4
+ },
+ "A_classify_first:slide_004": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "講者的攝影棚鏡頭，背景有大量裝飾文字。",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 1.8
+ },
+ "A_classify_first:slide_005": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "重\n\n寧\n\n詮釋\n拾穗\n關係\n解像\n\n先學\n回歸\n導以\n理等\n\n只能控制",
+   "description": "畫面為講者與背景文字的組合。講者位於畫面的左側，正對著鏡頭。背景是水墨風格的圖案，右側有豎寫的「重」字以及下方有「寧」、「詮釋」、「拾穗」、「關係」、「解像」、「先學」、「回歸」、「導以」、「理等」等文字排列。畫面下方有橫向書寫的文字“只能控制”。"
+  },
+  "sec": 3.0
+ },
+ "A_classify_first:slide_006": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "智慧\n觀規\n方熊險局爭短\n方熊險局爭短\n智慧觀規\n智慧觀規\n學習探索無限\n方熊險局爭短\n智慧觀規\n方熊險局爭短\n智慧觀規\n這古文明已揭示人體的真相",
+   "description": "畫面為黑底白字設計的投影片，左側是直排文字「智慧觀規」，上方有「學習探索無限」及「方熊險局爭短」等字句。右側為講者照片，背景為模糊的書法與文字，下方有一段說明文字：「這古文明已揭示人體的真相」。整體版面呈現左文右人的對稱結構。"
+  },
+  "sec": 4.1
+ },
+ "A_classify_first:slide_007": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "畫面為講者與背景佈景，非教材內容。",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 1.8
+ },
+ "A_classify_first:slide_008": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "古典醫學之\n\n四體設計系列\n\n古典醫學之人體設計系列",
+   "description": "畫面背景為水墨風格的山水畫，中央以金色文字標題「四體設計系列」，上方有類似筆觸的裝飾。下方則以較小字體說明為「古典醫學之 人體設計系列」。左右兩側各有直排文字，但內容不明確。"
+  },
+  "sec": 2.5
+ },
+ "A_classify_first:slide_009": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "主講人：游朱義導師\n\n現任：\n行政院國家發展基金 視訪委員\n中華民國青年創業總會 融資顧問\n中小企業聯合輔導中心 財務顧問待遇副理\n捷成科技／台灣光纖 負責人\n財團法人王鏡安兩界教基金會 董事\n\n學歷：\n法界佛教深造\n中興企研所國際研究班畢\n中原大學工業系畢",
+   "description": "這是一張主講人資訊的投影片。畫面左側為一位男士的肖像照片，他身著白色廚師服，胸前有標識。右側是文字內容，分為「主講人」和「現任」、「學歷」兩個部分。 \"主講人\"上方顯示了主講人的姓名：游朱義導師。 \"現任\"下方列出了主講人目前擔任的職務和參與的組織。 \"學歷\"下方則列出了主講人的教育背景。"
+  },
+  "sec": 4.1
+ },
+ "A_classify_first:slide_010": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "講者的攝影棚鏡頭",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 1.6
+ },
+ "A_classify_first:slide_011": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "講者的攝影棚鏡頭，背景有大量裝飾文字，為佈景而非教材內容。",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 1.6
+ },
+ "A_classify_first:slide_013": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "01 生命之初、胎體成長",
+   "description": "這是一張簡潔的投影片，背景為黑白漸層，上方為黑色，下方為白色。紅色條狀文字橫跨畫面中央，標題為「01 生命之初、胎體成長」。"
+  },
+  "sec": 2.0
+ },
+ "A_classify_first:slide_029": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "大士老君內觀經\n\n天地靖精，陰陽布化，萬物以生。承其宿業，\n分靈道一。父母和合，人受其生。始,\n\n  一月為胞，　精血凝也。\n  二月成胎，　形兆胚也。\n  三月陽神為三魂，動而生地也。\n  四月陰靈為七魄，靜鎮形也。\n  五月五行分藏，以安神也。\n  六月六律定腑，用滋霊也。\n  七月七精開發，通光明也。\n  八月八景神具，降真靈也。\n  九月宮室躍殖，以定精也。\n  十月氣足，　萬象成也。\n元和哺食，時不停也。",
+   "description": "這是一張呈現「大士老君內觀經」內容的投影片。畫面上方為標題「大士老君內觀經」，下方是經文內容。經文以時間順序排列，從一月到十月，每個月對應一段描述，說明胎兒發育的不同階段。畫面右側用不同顏色標記了“時間”、“神、色”、“身完成”等關鍵詞，並與左側的月份對應，可能表示這些階段的特徵或重要性。經文下方有「元和哺食，時不停也」的補充說明。"
+  },
+  "sec": 5.5
+ },
+ "A_classify_first:slide_038": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "第一周\n第二周\n第三周\n第四周\n\n《一月為胞，精血凝也》\n\n父母的陰陽合和開始時，受精卵一個月生長成為《胞》，\n是父精母血的凝聚物。【此時識蘊開始進入】。\n\n【比喻：賈房子簽合物】",
+   "description": "這是一張關於胚胎發育週期的投影片。畫面頂部橫向排列四張圖片，分別代表胚胎的第一、第二、第三和第四周的形態。圖片下方是標題「《一月為胞，精血凝也》」，說明胚胎在一個月內形成的過程。主要內容文字描述了父母陰陽結合後，受精卵發育成為胚胎（胞）的过程，並解釋其為父精母血的凝聚物，同時指出此時識蘊開始進入。下方用紫色框標註了一個比喻：「賈房子簽合物」。投影片底部有頁碼「7」。"
+  },
+  "sec": 3.8
+ },
+ "A_classify_first:slide_039": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "《二月胎，形兆胚也》\n(房子開始裝潢)\n胎型已成，從一個胞點開始，漸漸發展。\n具有相聯的胎型，七靈投住在此，\n如同房子是牠所有了，所以開始裝潢\n（趨向人形發展），開始搬家，累世業力\n的種子也降續到位。\n\n阿覡那識的無量種子，並非一次到位，\n而是隨著它靈意念，逐步搬遷。佛法\n說堆有業隨身，這個無量的業種子，\n過佈座法界，會隨著生命的意念，\n逐漸聚合回到這個生命體。",
+   "description": "這是一張投影片，背景為深色調，右側有一隻金龍的圖像。左側是黑底白字的正文字幕，標題為《二月胎，形兆胚也》，下方有副標題“(房子開始裝潢)”。正文內容以段落形式呈現，描述了胎型的發展和業力的降續過程。"
+  },
+  "sec": 4.2
+ },
+ "A_classify_first:slide_041": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "Adult\npolar bodies\nFertilized egg zona pellucida\nCleavage\nBlastocyst\nImplantation\nuterine wall\nGastrulation\nTurning\nOrganogenesis\nFetal growth and development\nBirth\nDays after fertilization\n18\n50\n2\n4\n6\n8\n10\n12\n14\n16\nFERTILIZED EGG\n1 DAY\n1.5 DAY\n2 DAY\n3 DAY\n4 DAY\nBLASTOCYST\n5 MONTH\n2 MONTHS\n3 MONTHS\n4 MONTHS\n5 MONTHS\n6 MONTHS\n7 MONTHS\n8 MONTHS\n9 MONTHS",
+   "description": "這是一張關於哺乳動物胚胎發育的示意圖。左側圖表展示了從受精卵到成體的整個過程，包括卵裂、胚泡形成、著床、原腸胚形成、器官發生和胎兒生長發育等階段，並標示了受精後的天數。右側圖表則以時間軸的方式呈現了胚胎在不同月份的形態變化，從受精卵到九個月大的胎兒，每個階段都有詳細的圖像展示。"
+  },
+  "sec": 4.5
+ },
+ "A_classify_first:slide_043": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "意導氣 氣成形\n先天之氣：腎氣",
+   "description": "畫面為兩張胚胎圖像的並排放置，左側為較早期的胚胎，右側為稍晚期的胚胎。圖片上方有文字說明：「意導氣 氣成形」，下方有黃色框出的文字「先天之氣：腎氣」。畫面下方有一個紅色的圓點。"
+  },
+  "sec": 2.6
+ },
+ "A_classify_first:slide_045": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "<<月陽神為三魂，動而生也\n(動：種子能動了) (業清完成)\n天魂(未來種子)、地魂(過去種子)、人魂(能現行的種子)。\n阿苴耶講的種子全部搬家完成。\n\n這個生命已經能啟動當下念頭，這個生命只要有任何意念的萌起，當下種子就能喚起，也可以說，這個沒有完整身體的生命，已經具備萌發意念能力( 種子有現行力道)\n。\n以佛法來說就是是識蘊齊備【識蘊成】。",
+   "description": "這是一張單頁投影片，背景為淺灰色。主要內容為黑體文字，呈現為左對齊的段落結構。上方標題為《月陽神為三魂，動而生也》，下方則為詳細解釋與說明。右下角有小圖示，呈現男性面部特徵，並在頁碼下方標註「11」。"
+  },
+  "sec": 4.0
+ },
+ "A_classify_first:slide_047": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "問題：為何小產大多在3月以前?",
+   "description": "畫面中央為黃色橫條，上面以黑色字體書寫「問題：為何小產大多在3月以前？」。背景為白色。"
+  },
+  "sec": 2.1
+ },
+ "A_classify_first:slide_048": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "畫面為書籍與蠟燭的特寫鏡頭，屬於影片內容而非教材。",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 1.5
+ },
+ "A_classify_first:slide_049": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "畫面為講者背景佈景，非教材內容。",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 1.5
+ },
+ "B_describe_first:slide_001": {
+  "parsed": {
+   "description": "畫面中央是一個黑白相間的太極圖，背景是模糊的水墨畫風格紋理。",
+   "is_slide": false,
+   "reject_reason": "純裝飾畫面",
+   "slide_text": ""
+  },
+  "sec": 1.9
+ },
+ "B_describe_first:slide_002": {
+  "parsed": {
+   "description": "畫面中央為金黃色文字「醫方法門」，下方有一句紅色的文字，背景是朦朧的山水雲霧意象。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "醫方法門。\n账"
+  },
+  "sec": 2.0
+ },
+ "B_describe_first:slide_003": {
+  "parsed": {
+   "description": "畫面中央是一位男性講者，他身著白色長袍，背景為模糊的書架和裝飾性的書法文字。講者的右側有一張疊加的投影片，上面有紅色大字的標題「經骨學院」，下方是較小的文字說明。畫面下方有一個白底黑字框，寫著「我們明明一個基本邏輯」。 講者正對著鏡頭說話。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "經\n骨\n學院\n\n現代醫學局部激觀\n問題難解。\n身體被操控為多\n沒遊散落生\n\n我們明明一個基本邏輯"
+  },
+  "sec": 3.1
+ },
+ "B_describe_first:slide_004": {
+  "parsed": {
+   "description": "畫面中央為一位男性講者，他手持一本黑色的書本，背景是灰色的書法文字和圖案，呈現出古樸的風格。左側有垂直排列的文字，右側則有水平方向的文字。下方有一句標語：「然而現代醫學即陷入困境」。整體畫面帶有朦朧感。",
+   "is_slide": false,
+   "reject_reason": "畫面主體為講者本人及背景裝飾，非教材內容。",
+   "slide_text": ""
+  },
+  "sec": 2.8
+ },
+ "B_describe_first:slide_005": {
+  "parsed": {
+   "description": "畫面中央是一位戴眼鏡的中年男子正在講述內容，他身後是佈滿裝飾文字的背景，包含書法、標語等。右側有垂直排列的經文，以及紅色底色的「重」字和一些漢字。畫面下方有字幕『只能控制』。",
+   "is_slide": false,
+   "reject_reason": "講者的攝影棚鏡頭，背景為裝飾文字。",
+   "slide_text": ""
+  },
+  "sec": 2.3
+ },
+ "B_describe_first:slide_006": {
+  "parsed": {
+   "description": "畫面左側為黑底白字的文字區塊，上方為直排中文書法，下方為橫向說明文字。右側為講者戴著眼鏡，手勢示意，背景為裝飾性的書法與圖案。",
+   "is_slide": false,
+   "reject_reason": "畫面主要呈現講者的影像和裝飾性背景，而非準備好的教材內容。",
+   "slide_text": ""
+  },
+  "sec": 2.2
+ },
+ "B_describe_first:slide_007": {
+  "parsed": {
+   "description": "畫面右側為講者，身著深色西裝，手持書本，面向鏡頭。背景為大型書法作品，左側為豎寫的文字，右側為橫向文字，下方有標題『未來之路』。畫面下方有白色文字說明。",
+   "is_slide": false,
+   "reject_reason": "講者在場景中，背景為裝飾性書法，非教材內容。",
+   "slide_text": ""
+  },
+  "sec": 2.2
+ },
+ "B_describe_first:slide_008": {
+  "parsed": null,
+  "sec": 94.9
+ },
+ "B_describe_first:slide_009": {
+  "parsed": {
+   "description": "畫面左側為一位男士的肖像照片，他身著白色廚師服，臉上有笑容，並比出剪刀手的手勢。右側是文字內容，上方為「主講人：游朱義導師」字樣，下方列出其現任和學歷等資訊。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "主講人：游朱義導師\n\n現任：\n行政院國家發展基金 視訪委員\n中華民國青年創業總會 融資 總顧問\n中小企業聯合輔導中心 財務顧問待遇副理\n捷成科技／台灣光纖 負責人\n財團法人王鏡安教基金會 董事\n\n學歷：\n法界佛教既是\n中興企研所國際研究班畢\n中央大學工業系畢業"
+  },
+  "sec": 4.2
+ },
+ "B_describe_first:slide_010": {
+  "parsed": {
+   "description": "畫面為一張講者的人像照片，背景是深色花紋圖案。照片左側為講者正面笑容燦爛的頭部特寫，右側則為講者的簡介文字。講者身著白色襯衫，胸前有標語與徽章。",
+   "is_slide": false,
+   "reject_reason": "畫面主要呈現人像照片和講者簡介，而非教材內容。",
+   "slide_text": ""
+  },
+  "sec": 2.6
+ },
+ "B_describe_first:slide_011": {
+  "parsed": {
+   "description": "這是一張拍攝講經現場的畫面。前方擺放著長桌，上面有幾位聽眾正坐著，背對著鏡頭。講壇位於畫面的中心位置，背景是裝飾性的木質結構，上面佈滿了金色的文字和圖案。講壇的左側和右側分別立著螢幕，螢幕上顯示著內容，但由於距離較遠，無法清晰辨認。整體場景呈現出莊嚴肅穆的氛圍。",
+   "is_slide": false,
+   "reject_reason": "畫面為講經現場拍攝，包含聽眾及佈景，非教材內容。",
+   "slide_text": ""
+  },
+  "sec": 2.8
+ },
+ "B_describe_first:slide_013": {
+  "parsed": {
+   "description": "畫面中央橫向呈現一條紅色長條帶，上面以白色文字標示著「01 生命之初、胎體成長」。背景為黑色。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "01 生命之初、胎體成長"
+  },
+  "sec": 1.9
+ },
+ "B_describe_first:slide_029": {
+  "parsed": {
+   "description": "這是一張呈現「大士老君內觀經」內容的投影片。畫面上方為標題，下方為經文內容，經文以彩色條狀區分不同的階段和意義。左側是時間、軸、顏色，右側是身體、漸成、功能、漸齊、備。每個階段都用簡短的文字描述。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "大士老君內觀經\n\n天地靖精，陰陽布化，萬物以生。承其宿業\n，分靈道一。父母和合，人受其生。始,\n\n 一月為胞，　精血凝也。\n 二月成胎，　形兆胚也。\n 三月陽神為三魂，　動而生也。\n 四月陰靈為七魄，　靜鎮形也。\n 五月五行分藏，　以安神也。\n 六月六律定腑，　用滋霊也。\n 七月七精開發，　通光明也。\n 八月八景神具，　降真靈也。\n 九月宮室堅羂，　以定精也。\n 十月氣足，　萬象成也。\n 元和哺食，時不停也。"
+  },
+  "sec": 4.8
+ },
+ "B_describe_first:slide_038": {
+  "parsed": {
+   "description": "這是一張關於胚胎發育週數的投影片。畫面上方是四張圖片，分別代表第一、第二、第三、第四周的胚胎圖像，下方則有標示對應的週數。圖片下方為橫向條狀圖，標示了各個週數。主要文字內容位於畫面底部，說明了父母的陰陽合和與精卵發育的過程，並用粗體字強調了特定詞語，以及用紫色框出一個比喻。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "第一周\n第二周\n第三周\n第四周\n\n《一月為胞，精血凝也》\n\n父母的陰陽合和和開始時，受精卵一個月生長成為《胞》，\n是父精母血的凝聚物。【此時識蘊開始進入】。\n\n【比喻：賈房子簽合物】\n\n7"
+  },
+  "sec": 4.0
+ },
+ "B_describe_first:slide_039": {
+  "parsed": {
+   "description": "這是一張講經內容的投影片，背景為金黃色，右側有一隻白色的老虎圖像，老虎的眼睛直視前方。左側是黑底綠字的文字內容，標題為《二月胎，形兆胚也》，下方有段落說明，文字排版整齊。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "<<二月胎，形兆胚也》\n(房子開始裝潢)\n胎型已成，從一個胞點開始，漸漸發展。\n具有祖略的胎型，七靈投住在此，\n如同房子是牠所有了，所以開始裝潢\n（趨向人形發展），開始搬家，累世業力\n的力量種子也降續到位。\n\n阿肭那識的無量種子，並非一次到位，\n而是隨著它靈意念，逐步搬遷。佛法\n說堆有業隨身，這個無量的業種子，\n過佈虛空法界，會隨著生命的意念，\n逐漸聚合回到這個生命體。\n8"
+  },
+  "sec": 4.4
+ },
+ "B_describe_first:slide_041": {
+  "parsed": {
+   "description": "這是一張展示哺乳動物胚胎發育過程的示意圖。左側圖示描繪了從成年個體到出生，以及胚胎發育各階段（受精卵、卵裂、胚泡形成、著床、原腸胚形成、轉變、器官發生）的時間線，並標注了受精後的天數。右側圖示則以一系列圖像展示了胚胎在不同時間點（從受精到9個月）的形態變化。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "Adult\npolar bodies\nFertilized egg zona pellucida\nCleavage\nBlastocyst\nBirth\nFetal growth and development\nDays after fertilization\nImplantation\nuterine wall\nGastrulation\nTurning\nOrganogenesis\nFERTILIZED EGG\n1 DAY\n1.5 DAY\n2 DAY\n3 DAY\n4 DAY\nBLASTOCYST\n5 MONTH\n2 MONTHS\n3 MONTHS\n4 MONTHS\n5 MONTHS\n6 MONTHS\n7 MONTHS\n8 MONTHS\n9 MONTHS"
+  },
+  "sec": 4.6
+ },
+ "B_describe_first:slide_043": {
+  "parsed": {
+   "description": "畫面呈現兩張胚胎圖像，左邊的胚胎為黑白素描，右邊的胚胎為彩色示意圖。圖像下方有文字說明，分別為「意導氣 氣成形」和「先天之氣：腎氣」。畫面整體呈現一種醫學或生理學教學的風格。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "意導氣 氣成形\n先天之氣：腎氣"
+  },
+  "sec": 2.8
+ },
+ "B_describe_first:slide_045": {
+  "parsed": {
+   "description": "這是一張講經影片的投影片，背景為淺色，主要內容以黑體文字呈現。畫面上方標題為《三月陽神為三魂，動而生也》，下方說明「(動: 種子能動了) (業清完成)」。接著列出天魂、地魂、人魂的定義，並說明“阿賴耶識的種子全部搬家完成了”。 之後解釋生命已經驗動當下念頭，需要有什麼樣的萌起，當下種子就能喚起。最後說明以佛法來說就是讓靈帶偏【識蘊成】。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "<<三月陽神為三魂，動而生也>>\n(動: 種子能動了) (業清完成)\n天魂(未來種子)、地魂(過去種子)、人魂(能現行的種子)。\n阿賴耶識的種子全部搬家完成了。\n\n這個生命已經能啟動當下念頭，這個生命只要有任何意念的萌起，當下種子就能喚起，也可以說，這個沒有完整身體的生命，已經具備前後意念能力( 種子有現行力道)\n。\n以佛法來說就是讓靈帶偏【識蘊成】\n11"
+  },
+  "sec": 4.7
+ },
+ "B_describe_first:slide_047": {
+  "parsed": {
+   "description": "這是一張簡潔的投影片，背景為白色。畫面上方有一條黃色的橫條，上面用黑色文字寫著「問題：為何小產多在3月以前?」。畫面頂端中央有一個紅色的圓點。",
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "問題：為何小產多在3月以前?"
+  },
+  "sec": 2.4
+ },
+ "B_describe_first:slide_048": {
+  "parsed": {
+   "description": "畫面呈現一尊佛像的側面，佛像雕刻精細，材質呈現出古樸的質感。佛像下方有一本打開的書或經文，光線照射在書頁上，營造出一種莊嚴肅穆的氛圍。畫面的右下角有 YouTube 的讚按鈕和一個標示著「訂閱觀法門」的圖示。",
+   "is_slide": false,
+   "reject_reason": "畫面為佛像與書籍的靜態攝影，屬於影片內容而非教材。",
+   "slide_text": ""
+  },
+  "sec": 2.5
+ },
+ "B_describe_first:slide_049": {
+  "parsed": {
+   "description": "畫面呈現一個木質書本的特寫，書本上印有圖案和文字。圖案是一個燈塔的簡化線條圖，下方是漢字「釋方明」。書本的右下角有 YouTube 的播放按鈕圖示，以及標語「訂閱釋方法門」，並有一個手指指標的圖示。",
+   "is_slide": false,
+   "reject_reason": "畫面為影片中的裝飾背景，而非教材內容。",
+   "slide_text": ""
+  },
+  "sec": 2.5
+ }
+}
