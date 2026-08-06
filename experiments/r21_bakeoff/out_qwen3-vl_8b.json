@@ -1,0 +1,181 @@
+{
+ "slide_001": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "純裝飾畫面",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 31.5
+ },
+ "slide_002": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "這是片頭動畫，非教材內容",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 8.2
+ },
+ "slide_003": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "這是講者的攝影棚鏡頭，背景裝飾文字為佈景，非教材內容",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 7.4
+ },
+ "slide_004": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "這是講者的攝影棚鏡頭，背景文字為佈景裝飾，非投影片內容。",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 5.3
+ },
+ "slide_005": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "此為講者在攝影棚內的鏡頭，背景文字屬佈景裝飾，非投影片教材內容。",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 9.2
+ },
+ "slide_006": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "這是講者的攝影棚鏡頭，背景文字為佈景裝飾，非準備好的教材內容",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 4.4
+ },
+ "slide_007": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "這是講者的攝影棚鏡頭，背景文字為佈景裝飾，非為講解而製作的教材內容",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 8.5
+ },
+ "slide_008": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "這是片頭片尾動畫",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 9.8
+ },
+ "slide_009": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "這是講者在攝影棚中的鏡頭，背景為佈景，非教材內容",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 8.9
+ },
+ "slide_010": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "這是講者的攝影棚鏡頭，屬於佈景部分，非準備好的教材內容。",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 4.8
+ },
+ "slide_011": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "此為會場全景，非獨立投影片內容",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 7.3
+ },
+ "slide_013": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "01生命之初、胎體成長",
+   "description": "這是一張標題頁投影片，包含一個水平紅色條帶橫跨畫面，條帶內有白色文字「01生命之初、胎體成長」。背景為純白色，左下角有一個小紅點作為裝飾元素。整體設計簡潔，用於引導觀眾進入講經內容的主題部分。"
+  },
+  "sec": 13.8
+ },
+ "slide_029": {
+  "parsed": null,
+  "sec": 57.9
+ },
+ "slide_038": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "...",
+   "description": "..."
+  },
+  "sec": 26.7
+ },
+ "slide_039": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "...",
+   "description": "..."
+  },
+  "sec": 21.3
+ },
+ "slide_041": {
+  "parsed": null,
+  "sec": 58.3
+ },
+ "slide_043": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "-U\n意導氣 氣成形\n先天之氣:腎氣",
+   "description": "這張投影片以左右分欄結構呈現：左側為灰白色胚胎圖像（可能代表早期發育階段），右側為粉紅色胚胎圖像（可能代表較晚階段）。中間黃色方塊包含關鍵文本，其中「意導氣 氣成形」闡述意念引導氣形成形的過程，「先天之氣:腎氣」指出先天之氣即腎氣。黃色背景用於突出核心概念，對比兩側圖像的顏色差異強調發育進程。"
+  },
+  "sec": 29.9
+ },
+ "slide_045": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "...",
+   "description": "..."
+  },
+  "sec": 25.7
+ },
+ "slide_047": {
+  "parsed": {
+   "is_slide": true,
+   "reject_reason": "",
+   "slide_text": "問題：為何小產大多在3月以前？",
+   "description": "畫面中央有一條黃色橫幅，上面以藍色字體居中顯示問題「問題：為何小產大多在3月以前？」。黃色背景用於突出問題的重點，藍色文字確保可讀性，整體設計簡潔明了，專注於引導觀眾思考該問題。"
+  },
+  "sec": 7.4
+ },
+ "slide_048": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "這是YouTube平台的訂閱按鈕動畫，屬於影片片頭/片尾元素，非講解用教材",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 5.8
+ },
+ "slide_049": {
+  "parsed": {
+   "is_slide": false,
+   "reject_reason": "這是片頭片尾動畫，包含 YouTube 互動按鈕和頻道標識，非教學用教材內容。",
+   "slide_text": "",
+   "description": ""
+  },
+  "sec": 9.1
+ }
+}
