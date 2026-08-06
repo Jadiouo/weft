@@ -27,6 +27,15 @@ OLLAMA = "http://localhost:11434/api/chat"
 #: `with_retries`，量測條件必須與實際會跑的條件一致。失敗次數另外記錄。
 MAX_RETRIES = 2
 
+#: 每個模型的 context 長度。**不是為了讓誰好看而個別調**——
+#: gemma4:12b 在 `num_ctx=8192` 下對長文投影片回傳**空內容**
+#: （`done_reason=None`、`eval_count=None`，即請求根本沒完成），
+#: 16384 就正常。它的影像 token 比 gemma3 多，8192 不夠放
+#: 「圖 + prompt + 長輸出」。這是環境參數不是能力差異，
+#: 用不足的 ctx 去比等於在比「誰的圖比較小」。
+NUM_CTX = {"gemma4:12b": 16384}
+DEFAULT_CTX = 8192
+
 
 def ask(model: str, sid: str) -> tuple[dict | None, float, int, str]:
     """回傳 (解析後的 dict 或 None, 總耗時, 重試次數, 最後一次的原始輸出)。"""
@@ -42,7 +51,8 @@ def ask(model: str, sid: str) -> tuple[dict | None, float, int, str]:
                  "images": [img]},
             ],
             "format": SCHEMA, "stream": False,
-            "options": {"temperature": 0.2, "num_ctx": 8192},
+            "options": {"temperature": 0.2,
+                        "num_ctx": NUM_CTX.get(model, DEFAULT_CTX)},
         })
         r.raise_for_status()
         raw = r.json()["message"].get("content") or ""
