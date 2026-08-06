@@ -106,9 +106,14 @@ class CorrectionMethod(StrEnum):
 
     v0.3 移除了本地 OCR + 詞庫鏈（原 `lexicon`），改由 S4 的 VLM 在
     同一次呼叫中對照投影片畫面修正逐字稿。
+
+    **v0.4 讓 `lexicon` 回來了，但來源不同**：詞庫改由 `slide_text`
+    （VLM 讀出的繁體）建立，不再依賴本地 OCR。且它只**提案**，
+    仍走 R13 的三道閘。見 docs/decisions.md D25。
     """
 
     VLM = "vlm"
+    LEXICON = "lexicon"
 
 
 class Correction(Strict):

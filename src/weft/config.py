@@ -113,6 +113,22 @@ class S4Config(StageConfig):
     local_fallback_model: str = "Qwen/Qwen3-VL-8B-Instruct"
 
 
+class S4bConfig(StageConfig):
+    """以投影片術語為詞庫的事後校正。SDD §4.7b（v0.4 新增）。
+
+    R20 實測：拼音門檻 0.90 下 precision **90%**，抓到 14 個相異錯誤；
+    對照組是 VLM 在人工字幕上產生的 7 筆。純本地，不花額度。
+    """
+
+    enabled: bool = True
+    #: 拼音相似度下限。R20 實測 0.70/0.80/0.90 的 precision 為 50%/79%/90%，
+    #: 且 0.90 與 1.00 結果完全相同——0.9 以上的候選實際上都是完全同音。
+    #: 誤報集中在 0.70–0.80（`潢房子是`→`同房子是` 這類無意義的窗）。
+    #:
+    #: **90% 恰好踩在 §5.2 的門檻（術語校正 precision ≥ 0.90）上，沒有餘裕。**
+    min_pinyin_similarity: float = 0.90
+
+
 class S5Config(StageConfig):
     model: str = "gemini-3.1-flash-lite"
     prompt_version: str = "v1"
@@ -220,6 +236,7 @@ class Config(BaseModel):
     s1b: S1bConfig = Field(default_factory=S1bConfig)
     s3: S3Config = Field(default_factory=S3Config)
     s4: S4Config = Field(default_factory=S4Config)
+    s4b: S4bConfig = Field(default_factory=S4bConfig)
     s5: S5Config = Field(default_factory=S5Config)
     s6: S6Config = Field(default_factory=S6Config)
     quota: QuotaConfig = Field(default_factory=QuotaConfig)

@@ -278,7 +278,14 @@ def understand_one(video_id: str, cfg: Config) -> bool:
     state.mark_done(Stage.S4_UNDERSTAND, stage_params(cfg, Stage.S4_UNDERSTAND))
     state.save(work.state)
 
-    # S4 可能改過逐字稿的 text_corrected（術語校正），落地
+    # ---- S4b 詞庫事後校正（純本地，不花額度）----
+    # **必須在 S4 全部跑完之後**：詞庫要從所有投影片建起來，
+    # 第 5 張投影片上的術語可能在第 20 段被聽錯（D25）。
+    from .stages import lexicon as lexicon_stage
+
+    lexicon_stage.apply_to_video(segments, slides, transcript, cfg.s4b)
+
+    # S4／S4b 改過逐字稿的 text_corrected（術語校正），落地
     work.transcript.write_text(transcript.model_dump_json(indent=2), encoding="utf-8")
     ir = VideoIR(meta=meta, slides=slides, segments=segments)
 

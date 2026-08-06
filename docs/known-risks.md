@@ -318,7 +318,7 @@ GPU。
 
 ---
 
-## R11：文言文 ASR 的 initial_prompt 緩解已移除
+## R11（部分解除，見 D25／R20）：文言文 ASR 的 initial_prompt 緩解已移除
 
 **原設計**（SDD §9）：把系列術語詞庫餵進 Whisper 的 `initial_prompt`，
 提高文言文與專有術語的辨識率。
