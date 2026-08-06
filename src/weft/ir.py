@@ -246,7 +246,10 @@ class Slide(Strict):
     #: 這同時是 §5.4 溯源檢查對 slide_ocr 型 block 的比對來源——
     #: 因此 prompt 必須要求 VLM **先逐字轉錄、再詮釋**，見 known-risks R9。
     slide_text: str | None = None
-    layout_description: str | None = None  # 由 S4 填入
+    layout_description: str | None = None  # 由 S4a 填入
+    #: S4a 判定「這不是投影片」時的理由（§4.7a）。
+    #: 判斷是 S4a 做的，理由就存在這裡——§5.6 的人工複核靠它。
+    reject_reason: str | None = None
 
 
 # --------------------------------------------------------------------------

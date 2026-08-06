@@ -35,11 +35,10 @@ class ApiKeyMissing(RuntimeError):
 #: 的子集（不吃 $defs／anyOf），自動轉換出來的東西會被靜默忽略，然後模型
 #: 回傳自由格式的 JSON，錯誤要到反序列化才浮現。
 #:
-#: **欄位順序有意義。** structured output 是逐欄生成的，先產生的欄位不能
-#: 因後面的內容而回頭修改。所以順序是：
-#:   is_slide → slide_text（逐字轉錄）→ content_blocks（詮釋）
-#: 讓模型**先把畫面上的字抄下來，再據以詮釋**。slide_text 同時是 §5.4
-#: 溯源檢查的比對來源，這個順序是它僅存的獨立性（見 known-risks R9）。
+#: **v0.4：`is_slide` 與 `slide_text` 移到 S4a**（§4.7a）。這裡只剩
+#: 「校正 → 理解」。投影片的文字由 S4a 讀出後以**文字**掛進 prompt，
+#: 所以本階段不需要、也不應該重讀圖——重讀等於讓同一個模型既產生來源
+#: 又產生待驗證的內容，那正是 R9 記的獨立性問題。
 RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -49,10 +48,6 @@ RESPONSE_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "segment_id": {"type": "string"},
-                    "is_slide": {"type": "boolean"},
-                    "reject_reason": {"type": "string"},
-                    "slide_text": {"type": "string"},
-                    "layout_description": {"type": "string"},
                     "corrections": {
                         "type": "array",
                         "items": {
@@ -88,8 +83,7 @@ RESPONSE_SCHEMA = {
                     "terms": {"type": "array", "items": {"type": "string"}},
                 },
                 "required": [
-                    "segment_id", "is_slide", "slide_text",
-                    "corrections", "summary", "content_blocks", "terms",
+                    "segment_id", "corrections", "summary", "content_blocks", "terms",
                 ],
             },
         }
@@ -99,38 +93,14 @@ RESPONSE_SCHEMA = {
 
 
 SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的系統做內容理解。
-你會拿到一段影片的**代表畫面**與該時段的逐字稿。
+你會拿到一段影片的逐字稿，以及該時段螢幕上投影片的**文字內容與版面描述**。
 
-代表畫面是自動抽出的——系統只知道「這段時間畫面是靜止的」，**不知道那是
-投影片還是講者鏡頭**。判斷它是什麼，是你的第一項工作。
+投影片的文字**已經由前一個階段逐字讀出**，你不需要也不應該重讀。
+你的工作是理解「講者在這段時間講了什麼」，投影片是參考材料。
 
-## 你的四項工作，按順序
+## 你的兩項工作
 
-### 1. 判斷這張圖是不是投影片（`is_slide`）
-
-**是投影片**：畫面主體為文字、圖表、經文、流程圖等準備好的教材內容。
-**不是投影片**：講者的攝影棚鏡頭、片頭片尾動畫、純裝飾畫面。
-
-注意：講者所在的攝影棚背景**經常有大量裝飾文字**（標語、書法、招牌）。
-那些是**佈景**，不是投影片內容。判斷依據是「這是為了講解而製作的教材」，
-不是「畫面上有沒有字」。
-
-`is_slide: false` 時，填 `reject_reason`（一句話），`slide_text` 留空字串，
-`content_blocks` 只能用 `provenance_kind: "transcript"`。
-
-**若這一段既不是投影片、逐字稿又是空的**（例如片頭動畫、還沒開始講話的
-畫面），`content_blocks` 請回**空陣列**。這種段落沒有任何可溯源的材料，
-描述畫面上看到的字會變成無法驗證的內容，系統會整批退回。
-
-### 2. 逐字轉錄投影片上的文字（`slide_text`）
-
-**先抄，再詮釋。** 把畫面上的文字**原樣**打出來，保留換行與排列順序
-（直排請由右至左、由上而下）。這一欄是後續溯源檢查的比對基準，
-**不要在這裡改寫、摘要或補充**。
-
-`is_slide: false` 時填空字串。
-
-### 3. 對照投影片修正逐字稿的錯字（`corrections`）
+### 1. 修正逐字稿的錯字（`corrections`）
 
 逐字稿來自語音辨識或字幕，專有術語常出現**同音錯字**。請找出這類錯誤。
 
@@ -167,7 +137,11 @@ SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的�
 - **寧可漏改，不可亂改。** 講者本來就講對的詞不要動；一般用語不要動
 - 沒有要改的就回空陣列（多數段落都該是空的）
 
-### 4. 理解與結構化（`summary`、`content_blocks`、`terms`）
+### 2. 理解與結構化（`summary`、`content_blocks`、`terms`）
+
+**若這一段沒有投影片、逐字稿又是空的**（例如片頭動畫、還沒開始講話的
+畫面），`content_blocks` 請回**空陣列**。這種段落沒有任何可溯源的材料，
+描述畫面上看到的字會變成無法驗證的內容，系統會整批退回。
 
 ## 絕對規則
 
@@ -198,10 +172,8 @@ SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的�
   必須寫成文字
 - `口頭延伸`：講者在投影片之外補充的說明、比喻、離題
 
-## layout_description
-
-用一段文字描述這一頁的版面結構與其語意，不只是列出文字。
-`is_slide: false` 時可留空。
+**`slide_ocr` 型的來源是給你參考的投影片文字**，不是你讀出來的——
+所以引用它時要如實引用，不要「修正」它。
 """
 
 
@@ -250,8 +222,14 @@ def seg_id_of(segments, image_key: str) -> str:
     return next((s.segment_id for s in segments if s.candidate_ref == image_key), "?")
 
 
-def build_parts(segments, prev_summary: str | None) -> list[tuple[str, str | None]]:
-    """組出一次呼叫的內容序列。SDD §4.7 的輸入清單。
+def build_parts(segments, prev_summary: str | None,
+                slide_context: dict | None = None,
+                send_images: bool = True) -> list[tuple[str, str | None]]:
+    """組出一次呼叫的內容序列。SDD §4.7c 的輸入清單。
+
+    `slide_context` 是 `{slide_id: {"slide_text": ..., "description": ...}}`，
+    由 S4a 產出。有它時**改掛文字、不送圖**——投影片的內容已經文字化，
+    再送一次圖只是重複，而且會把 D20 的錯位風險帶回來。
 
     回傳 `[(文字, 圖的 slide_id 或 None), ...]`。每個 tuple 是**一段文字，
     後面緊接它自己的那張圖**——`call_gemini` 照這個順序疊 parts。
@@ -268,11 +246,21 @@ def build_parts(segments, prev_summary: str | None) -> list[tuple[str, str | Non
 
     for seg in segments:
         header = f"## segment {seg.segment_id}（{seg.t_start:.1f}s – {seg.t_end:.1f}s）"
-        image_key = seg.candidate_ref or None
-        if image_key:
+
+        # v0.4：投影片的文字與版面已由 S4a 讀出，這裡用**文字**掛進來，
+        # 預設不再送圖（§4.7c）。送圖只在設定明確要求時發生。
+        slide = slide_context.get(seg.slide_ref or seg.candidate_ref or "") if slide_context else None
+        image_key = (seg.candidate_ref or None) if send_images else None
+        if slide and (slide.get("slide_text") or slide.get("description")):
+            header += f"\n\n這一段螢幕上的投影片（{seg.slide_ref or seg.candidate_ref}）："
+            if slide.get("slide_text"):
+                header += f"\n逐字內容：\n{slide['slide_text']}"
+            if slide.get("description"):
+                header += f"\n版面：{slide['description']}"
+        elif image_key:
             header += f"\n**下面緊接的那一張圖**就是這一段的代表畫面（{image_key}）。"
         else:
-            header += "\n此段沒有代表畫面（純逐字稿）。"
+            header += "\n此段沒有投影片（純逐字稿）。"
 
         transcript = (seg.transcript_corrected or seg.transcript_raw).strip()
         header += f"\n\n逐字稿：\n{transcript or '（此段無逐字稿）'}"
@@ -284,60 +272,55 @@ def build_parts(segments, prev_summary: str | None) -> list[tuple[str, str | Non
     )
     return parts
 
-def call_gemini(
+def call_model(
     segments,
     image_paths: dict[str, Path],
     prev_summary: str | None,
     cfg,
+    slide_context: dict | None = None,
 ) -> BatchResult:
-    """送出一次批次呼叫。SDD §4.7。
+    """送出一次 S4c 的批次呼叫。SDD §4.7c。
 
-    §4.7 批次策略：可將 2–3 個相鄰 segment 合併為一次呼叫以節省額度，
+    §4.7c 批次策略：可將 2–3 個相鄰 segment 合併為一次呼叫以節省額度，
     但**輸出仍須逐 segment 分開**——所以 schema 是 `{"segments": [...]}`
     而不是單一物件。
-    """
-    from google.genai import types
 
-    client = _client()
+    **v0.4：預設不送圖。** 投影片的文字已由 S4a 讀出、以文字掛進 prompt；
+    再送一次圖等於讓同一個模型既產生來源又產生待驗證的內容（R9），
+    而且會把 D20 的錯位風險帶回來。`cfg.send_images` 要明確打開才送。
+    """
+    from .providers import Part, generate
+
+    send_images = bool(getattr(cfg, "send_images", False))
 
     # 文字與圖**交錯**：每張圖緊接在它自己的區段標頭之後。
     # 首跑用「文字全在前、圖全在後」，30.6% 的區段拿到隔壁的圖（D20）。
-    contents: list = []
-    for text, image_key in build_parts(segments, prev_summary):
-        contents.append(text)
+    parts: list[Part] = []
+    for text, image_key in build_parts(segments, prev_summary, slide_context, send_images):
+        parts.append(Part(text=text))
         if image_key is None:
             continue
         path = image_paths.get(image_key)
         if path and path.exists():
-            contents.append(
-                types.Part.from_bytes(data=path.read_bytes(), mime_type="image/png")
-            )
+            parts.append(Part(image=path.read_bytes()))
         else:
             # 圖不見了就明說，**不要靜靜跳過**——靜靜跳過會讓後面的圖遞補
             # 上來，整批的對應全部位移。
             log.warning("%s：代表畫面 %s 不存在，改以純逐字稿處理",
                         seg_id_of(segments, image_key), image_key)
-            contents.append("（這一段的代表畫面檔案遺失，請當作沒有畫面處理。）")
+            parts.append(Part(text="（這一段的代表畫面檔案遺失，請當作沒有畫面處理。）"))
 
-    response = client.models.generate_content(
-        model=cfg.model,
-        contents=contents,
-        config=types.GenerateContentConfig(
-            system_instruction=SYSTEM_PROMPT,
-            response_mime_type="application/json",
-            response_schema=RESPONSE_SCHEMA,
-            temperature=0.2,
-        ),
-    )
-
-    payload = json.loads(response.text)
-    usage = getattr(response, "usage_metadata", None)
+    result = generate(cfg.model, SYSTEM_PROMPT, parts, RESPONSE_SCHEMA)
     return BatchResult(
-        per_segment={s["segment_id"]: s for s in payload.get("segments", [])},
-        input_tokens=getattr(usage, "prompt_token_count", 0) or 0,
-        output_tokens=getattr(usage, "candidates_token_count", 0) or 0,
-        model_used=cfg.model,
+        per_segment={s["segment_id"]: s for s in result.payload.get("segments", [])},
+        input_tokens=result.input_tokens,
+        output_tokens=result.output_tokens,
+        model_used=result.model_used,
     )
+
+
+#: 舊名保留，避免既有呼叫端與測試一次全斷。
+call_gemini = call_model
 
 
 def validate_corrections(raw: dict, segment) -> list:
@@ -458,7 +441,7 @@ def apply_corrections(transcript, segment, corrections) -> None:
     segment.corrections = list(corrections)
 
 
-def to_understanding(raw: dict, segment, cfg):
+def to_understanding(raw: dict, segment, cfg, slide_obj=None):
     """把模型回傳的 dict 轉成 IR 的 Understanding。
 
     `provenance` 在 IR 中是必填且不得為 null（§3.4、§5.3 不變量 7）。
@@ -467,8 +450,11 @@ def to_understanding(raw: dict, segment, cfg):
     """
     from ..ir import ContentBlock, ContentType, Provenance, ProvenanceKind, Understanding
 
-    is_slide = bool(raw.get("is_slide", True))
-    slide_text = (raw.get("slide_text") or "").strip()
+    # v0.4：`is_slide` 與 `slide_text` 由 **S4a** 決定（§4.7a）。
+    # 這裡從 slide 物件讀回來，而不是從模型回傳讀——S4c 已經不產生它們。
+    slide = slide_obj if slide_obj is not None else None
+    is_slide = bool(slide is not None and slide.slide_text)
+    slide_text = (slide.slide_text if slide is not None else None) or ""
 
     blocks = []
     for i, item in enumerate(raw.get("content_blocks", [])):
@@ -509,11 +495,11 @@ def to_understanding(raw: dict, segment, cfg):
 
     return Understanding(
         is_slide=is_slide,
-        reject_reason=(raw.get("reject_reason") or "").strip() or None if not is_slide else None,
+        reject_reason=(slide.reject_reason if slide is not None else None),
         slide_text=slide_text or None,
         corrections=validate_corrections(raw, segment),
         summary=(raw.get("summary") or "").strip(),
-        layout_description=(raw.get("layout_description") or "").strip() or None,
+        layout_description=(slide.layout_description if slide is not None else None),
         content_blocks=blocks,
         terms=[t for t in raw.get("terms", []) if t],
         model_used=cfg.model,

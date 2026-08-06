@@ -48,11 +48,24 @@ s1b:
 s3:
   min_segment_sec: 5.0
 
-# S4 聯合理解（§4.7）。唯一花額度的階段。
+# S4a 投影片理解（§4.7a，v0.4）。逐張相異投影片一次呼叫，不批次。
+# 模型規格是 `供應者:模型名`——供應者必須明寫（§5.5 #6）。
+#   gemini:gemini-3.1-flash-lite   花額度
+#   ollama:qwen2.5vl:7b            不花額度，R21 實測轉錄最準（跨集 CER 4.9%）
+#   ollama:gemma4:12b              不花額度，R21 實測分類最準（is_slide 95%）
+s4a:
+  model: gemini:gemini-3.1-flash-lite
+  prompt_version: v1
+  max_retries: 2
+  retry_backoff_sec: 4.0
+
+# S4c 逐段理解（§4.7c）。
 s4:
-  model: gemini-3.1-flash-lite
-  # v2：D20 的圖片↔區段交錯綁定 + R13 的校正負面示例。改 prompt 必改此值。
-  prompt_version: v2
+  model: gemini:gemini-3.1-flash-lite
+  # v0.4 預設不送圖——投影片文字已由 S4a 讀出並以文字掛進 prompt
+  send_images: false
+  # v3：拆出 S4a 後本階段不再負責 is_slide 與 slide_text。改 prompt 必改此值。
+  prompt_version: v3
   batch_segments: 3
   prev_summary_max_chars: 200
   max_retries: 2
@@ -63,7 +76,7 @@ s4:
   local_fallback_model: Qwen/Qwen3-VL-8B-Instruct
 
 s5:
-  model: gemini-3.1-flash-lite
+  model: gemini:gemini-3.1-flash-lite
   prompt_version: v1
 
 # S6 渲染（§4.9）

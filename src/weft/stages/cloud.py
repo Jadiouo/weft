@@ -45,7 +45,7 @@ def s4_understand(
         PermanentApiError,
         QuotaHit,
         apply_corrections,
-        call_gemini,
+        call_model,
         to_understanding,
         with_retries,
     )
@@ -56,6 +56,11 @@ def s4_understand(
 
     by_slide_id = {s.slide_id: s for s in slides}
     image_paths = {s.slide_id: work.dir / s.image_path for s in slides}
+    # v0.4：S4a 已讀出投影片文字，這裡以**文字**掛進 prompt（§4.7c）
+    slide_context = {
+        s.slide_id: {"slide_text": s.slide_text, "description": s.layout_description}
+        for s in slides if s.slide_text or s.layout_description
+    }
 
     results: list[Understanding] = []
     prev_summary: str | None = None
@@ -90,7 +95,8 @@ def s4_understand(
 
         try:
             batch_result = with_retries(
-                lambda b=batch: call_gemini(b, image_paths, prev_summary, p),
+                lambda b=batch: call_model(b, image_paths, prev_summary, p,
+                                           slide_context),
                 p.max_retries,
                 p.retry_backoff_sec,
                 on_attempt=_record_attempt,
@@ -131,7 +137,8 @@ def s4_understand(
                 log.warning("模型未回傳 %s 的結果，標記為 null", seg.segment_id)
                 seg.understanding = None
                 continue
-            understanding = to_understanding(raw, seg, p)
+            slide_obj = by_slide_id.get(seg.slide_ref or seg.candidate_ref or "")
+            understanding = to_understanding(raw, seg, p, slide_obj=slide_obj)
             _apply_to_segment(seg, understanding, by_slide_id, transcript)
 
             results.append(understanding)
@@ -159,17 +166,11 @@ def _apply_to_segment(seg, understanding, by_slide_id, transcript) -> None:
 
     # VLM 判定不是投影片 → 降級。slide_ref 清掉（沒有投影片可指向），
     # candidate_ref 保留，讓 debug markdown 還能顯示被拒絕的那張圖。
+    # v0.4：`is_slide` 由 **S4a** 判定（§4.7a），這裡只是把結果反映到 segment。
+    # 不再回頭寫 `slide.slide_text`——那是 S4a 的產出，S4c 不該覆寫它。
     if not understanding.is_slide:
         seg.mode = SegmentMode.SPEAKER_ONLY
         seg.slide_ref = None
-        log.info("%s：VLM 判定不是投影片（%s）", seg.segment_id,
-                 understanding.reject_reason or "未說明")
-    elif seg.slide_ref and understanding.slide_text:
-        # VLM 讀出的投影片文字是 §5.4 溯源檢查的比對來源
-        slide = by_slide_id.get(seg.slide_ref)
-        if slide is not None:
-            slide.slide_text = understanding.slide_text
-            slide.layout_description = understanding.layout_description
 
     if understanding.corrections and transcript is not None:
         apply_corrections(transcript, seg, understanding.corrections)

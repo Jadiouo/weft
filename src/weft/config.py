@@ -107,8 +107,28 @@ class S3Config(StageConfig):
     min_segment_sec: float = 5.0
 
 
+class S4aConfig(StageConfig):
+    """投影片理解。SDD §4.7a（v0.4 新增）。
+
+    **逐張相異投影片一次呼叫，不批次**——D20 的錯位就是批次造成的。
+    """
+
+    #: `供應者:模型名`。**供應者必須明寫**（§5.5 #6：本地 fallback 要是
+    #: 明確的設定開關，猜測會讓那條規定失效）。
+    #:
+    #: 預設用 gemini 以維持既有行為；改成 `ollama:...` 即不花額度。
+    #: R21 實測（跨集 16 張人工繕打）：
+    #:   is_slide     gemma4:12b 90.5% > qwen3-vl 84.2% > gemma3 71.4% > qwen2.5vl 66.7%
+    #:   slide_text   qwen2.5vl 4.9% < gemma3 7.9% < gemma4 37.8%
+    #: **兩項的最佳模型不同**，這正是逐子階段可設定的理由。
+    model: str = "gemini:gemini-3.1-flash-lite"
+    prompt_version: str = "v1"
+    max_retries: int = 2
+    retry_backoff_sec: float = 4.0
+
+
 class S4Config(StageConfig):
-    """聯合理解。唯一花額度的階段。SDD §4.7。"""
+    """逐段理解（v0.4 起為 S4c）。SDD §4.7c。"""
 
     #: **釘住具體版本，不用 `gemini-flash-lite-latest` 這類別名。**
     #: §4.7 的冪等鍵是 `segment_id + prompt_version + model`——別名會在
@@ -116,11 +136,15 @@ class S4Config(StageConfig):
     #:
     #: 2026-08-04 實測：`gemini-2.5-flash-lite` 對新使用者已停用（404
     #: "no longer available to new users"），雖然仍出現在 models.list()。
-    model: str = "gemini-3.1-flash-lite"
-    #: v2（2026-08-06）：D20 的圖片↔區段交錯綁定 + R13 的校正負面示例。
+    model: str = "gemini:gemini-3.1-flash-lite"
+    #: **v0.4 預設不送圖**：投影片文字已由 S4a 讀出並以文字掛進 prompt。
+    #: 再送一次圖等於讓同一個模型既產生來源又產生待驗證的內容（R9），
+    #: 而且會把 D20 的錯位風險帶回來。要送必須明確打開。
+    send_images: bool = False
+    #: v3（2026-08-06）：拆出 S4a 後，本階段不再負責 is_slide 與 slide_text。
     #: **改了 prompt 就必須改這個**——否則舊快取會被當成新結果讀回來。
     #: v0.3 首跑的 07_understanding 是 v1，帶著 30.6% 的圖片錯位。
-    prompt_version: str = "v2"
+    prompt_version: str = "v3"
     #: 可將 2–3 個相鄰 segment 併為一次呼叫，但輸出仍逐 segment 分開
     batch_segments: int = 3
     prev_summary_max_chars: int = 200
@@ -149,7 +173,7 @@ class S4bConfig(StageConfig):
 
 
 class S5Config(StageConfig):
-    model: str = "gemini-3.1-flash-lite"
+    model: str = "gemini:gemini-3.1-flash-lite"
     prompt_version: str = "v1"
 
 
@@ -255,6 +279,7 @@ class Config(BaseModel):
     s1b: S1bConfig = Field(default_factory=S1bConfig)
     s1c: S1cConfig = Field(default_factory=S1cConfig)
     s3: S3Config = Field(default_factory=S3Config)
+    s4a: S4aConfig = Field(default_factory=S4aConfig)
     s4: S4Config = Field(default_factory=S4Config)
     s4b: S4bConfig = Field(default_factory=S4bConfig)
     s5: S5Config = Field(default_factory=S5Config)

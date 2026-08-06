@@ -48,6 +48,11 @@ class WorkPaths:
 
     # S1a
     @property
+    def slide_understanding_dir(self) -> Path:
+        #: S4a 逐張投影片的理解結果（§4.7a）。每張一檔，便於斷點續跑。
+        return self.dir / "04_slide_understanding"
+
+    @property
     def dedup(self) -> Path:
         #: S1c 去重結果（§4.3b）。用 04 這個空號——S2 於 v0.3 移除後留下的。
         return self.dir / "04_dedup.json"

@@ -1,0 +1,215 @@
+"""S4a — 投影片理解。SDD §4.7a（v0.4）。
+
+處理單位是 **S1c 去重後的代表幀**，不是 S1b 的候選幀。
+實測 49 個候選幀去重後只有 22 張代表幀。
+
+**這一步只讀圖，不含逐字稿。** §5.4 的溯源基準必須獨立於待驗證的內容——
+把逐字稿一起餵進來，模型就可能把聽到的字寫進 `slide_text`，
+而那正是後面要拿來驗證逐字稿的東西。
+
+**一張圖一次呼叫，不批次。** D20 的錯位就是批次造成的
+（一批 3 段的文字放前面、圖片裸接在後面，30.6% 的區段拿到隔壁的圖），
+而 S1c 之後呼叫數已經大幅下降，批次省不到什麼。
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+
+from ..ir import Slide
+from .providers import Part, generate
+
+log = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的系統讀投影片。
+你會拿到一張從影片中抽出的靜止畫面。
+
+### 1. 判斷這張圖是不是投影片（`is_slide`）
+
+**是投影片**：畫面主體為文字、圖表、經文、流程圖等準備好的教材內容。
+**不是投影片**：講者的攝影棚鏡頭、片頭片尾動畫、純裝飾畫面、會場全景。
+
+注意：講者所在的攝影棚背景**經常有大量裝飾文字**（標語、書法、招牌）。
+那些是**佈景**，不是投影片內容。判斷依據是「這是為了講解而製作的教材」，
+不是「畫面上有沒有字」。
+
+`is_slide: false` 時填 `reject_reason`（一句話），其餘欄位留空字串。
+
+### 2. 逐字轉錄（`slide_text`）
+
+**先抄，再詮釋。** 把畫面上的文字**原樣**打出來，保留換行與排列順序。
+
+- 直排請由右至左、由上而下
+- **多欄並排時，同一列的左右欄要寫在同一行**——
+  「一月為胞，　精血凝也。」是一整句，不可拆成兩欄分別抄完
+- 標點照畫面上的實際字元
+- 純裝飾的背景文字不要抄
+
+這一欄是後續溯源檢查的比對基準，**不要在這裡改寫、摘要或補充**。
+
+### 3. 版面描述（`description`）
+
+用一段文字說明這一頁的**版面結構與它表達的關係**：箭頭指向什麼、
+雙欄如何對應、色彩編碼代表什麼、圖片畫的是什麼。
+
+RAG 讀不到圖，所以「看得懂這張圖的人才知道的事」必須寫成文字。
+
+**這一欄可以詮釋，但不得陳述畫面上沒有的資訊。** 不確定顏色、位置、
+數量時，寧可不寫也不要猜——這一欄沒有自動的溯源檢查擋得住編造。
+
+只輸出 JSON。"""
+
+#: 欄位順序有意義：structured output 逐欄生成，先產生的不能回頭改。
+#: 這個順序強制模型**先抄再詮釋**（SDD §4.7a）。
+RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_slide": {"type": "boolean"},
+        "reject_reason": {"type": "string"},
+        "slide_text": {"type": "string"},
+        "description": {"type": "string"},
+    },
+    "required": ["is_slide", "reject_reason", "slide_text", "description"],
+}
+
+USER_PROMPT = "這是不是投影片？若是，逐字轉錄並描述版面。"
+
+
+def understand_slide(spec: str, image: bytes) -> dict:
+    """單張投影片。回傳 `{is_slide, reject_reason, slide_text, description, model_used}`。"""
+    result = generate(spec, SYSTEM_PROMPT, [Part(text=USER_PROMPT), Part(image=image)],
+                      RESPONSE_SCHEMA)
+    payload = dict(result.payload)
+    payload["model_used"] = result.model_used
+    payload["_tokens"] = (result.input_tokens, result.output_tokens)
+    return payload
+
+
+def _cache_path(work, slide_id: str):
+    return work.slide_understanding_dir / f"{slide_id}.json"
+
+
+def _load_cached(work, slide_id: str, spec: str, prompt_version: str) -> dict | None:
+    path = _cache_path(work, slide_id)
+    if not path.exists():
+        return None
+    try:
+        cached = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 —— 壞掉的快取當作沒有
+        return None
+    if cached.get("model_used") != spec or cached.get("prompt_version") != prompt_version:
+        return None
+    return cached
+
+
+def apply_to_slide(slide: Slide, payload: dict) -> None:
+    """把結果套到 Slide 上。**快取命中與新呼叫都要走這裡**（D22）。"""
+    if payload.get("is_slide"):
+        slide.slide_text = (payload.get("slide_text") or "").strip() or None
+        slide.layout_description = (payload.get("description") or "").strip() or None
+        slide.reject_reason = None
+    else:
+        # 不是投影片就不留文字——留著會被 §5.4 當成合法的比對來源
+        slide.slide_text = None
+        slide.layout_description = None
+        slide.reject_reason = (payload.get("reject_reason") or "").strip() or "未說明"
+
+
+def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
+    """對所有**代表幀**跑投影片理解。就地更新 `slides`。
+
+    `on_call(spec, in_tokens, out_tokens, slide_id, status)` 供額度記帳。
+    失敗行為（§4.7a）：重試由呼叫端負責；仍失敗則該張留空並記錄，
+    **不得以部分輸出充數**。
+    """
+    from .dedup import representatives
+    from .understand import with_retries
+
+    p = cfg.s4a
+    work.slide_understanding_dir.mkdir(parents=True, exist_ok=True)
+    reps = representatives(slides)
+    stats = {"representatives": len(reps), "done": 0, "failed": 0,
+             "is_slide": 0, "cached": 0}
+
+    for slide in reps:
+        cached = _load_cached(work, slide.slide_id, p.model, p.prompt_version)
+        if cached is not None:
+            apply_to_slide(slide, cached)
+            stats["cached"] += 1
+            stats["done"] += 1
+            stats["is_slide"] += bool(cached.get("is_slide"))
+            continue
+
+        image = (work.dir / slide.image_path).read_bytes()
+
+        def _attempt(ok: bool, exc, _sid=slide.slide_id):
+            if on_call and not ok:
+                on_call(p.model, 0, 0, _sid, "error")
+
+        try:
+            payload = with_retries(
+                lambda img=image: understand_slide(p.model, img),
+                p.max_retries, p.retry_backoff_sec, on_attempt=_attempt,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.error("S4a %s：%s 失敗，留空並繼續——%s",
+                      work.video_id, slide.slide_id, str(exc)[:160])
+            stats["failed"] += 1
+            continue
+
+        if on_call:
+            in_tok, out_tok = payload.pop("_tokens", (0, 0))
+            on_call(p.model, in_tok, out_tok, slide.slide_id, "ok")
+        payload.pop("_tokens", None)
+        payload["prompt_version"] = p.prompt_version
+        _cache_path(work, slide.slide_id).write_text(
+            json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+
+        apply_to_slide(slide, payload)
+        stats["done"] += 1
+        stats["is_slide"] += bool(payload.get("is_slide"))
+        if not payload.get("is_slide"):
+            log.info("S4a %s：%s 判定不是投影片（%s）", work.video_id, slide.slide_id,
+                     payload.get("reject_reason") or "未說明")
+
+    # 被合併的候選幀沿用代表幀的結果——同一張投影片本來就該有同一份文字
+    by_id = {s.slide_id: s for s in slides}
+    for slide in slides:
+        if slide.duplicate_of and slide.duplicate_of in by_id:
+            rep = by_id[slide.duplicate_of]
+            slide.slide_text = rep.slide_text
+            slide.layout_description = rep.layout_description
+            slide.reject_reason = rep.reject_reason
+
+    log.info("S4a %s：%d 張代表幀（快取 %d、失敗 %d），其中 %d 張判定為投影片",
+             work.video_id, stats["representatives"], stats["cached"],
+             stats["failed"], stats["is_slide"])
+    return stats
+
+
+def rehydrate(cfg, work, slides: list[Slide]) -> int:
+    """續跑時從快取重建投影片文字。回傳套用的張數。
+
+    **衍生狀態不能只在「新計算」那條路上做**（D22）——不重建的話，
+    續跑時 S4c 拿到的 `slide_context` 是空的，等於白拆。
+    """
+    p = cfg.s4a
+    applied = 0
+    for slide in slides:
+        if slide.duplicate_of:
+            continue
+        cached = _load_cached(work, slide.slide_id, p.model, p.prompt_version)
+        if cached is None:
+            continue
+        apply_to_slide(slide, cached)
+        applied += 1
+
+    by_id = {s.slide_id: s for s in slides}
+    for slide in slides:
+        if slide.duplicate_of and slide.duplicate_of in by_id:
+            rep = by_id[slide.duplicate_of]
+            slide.slide_text = rep.slide_text
+            slide.layout_description = rep.layout_description
+            slide.reject_reason = rep.reject_reason
+    return applied

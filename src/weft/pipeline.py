@@ -30,6 +30,7 @@ def stage_params(cfg: Config, stage: Stage) -> str:
         Stage.S1B_SLIDES: cfg.s1b,
         Stage.S1C_DEDUP: cfg.s1c,
         Stage.S3_ALIGN: cfg.s3,
+        Stage.S4A_SLIDES: cfg.s4a,
         Stage.S4_UNDERSTAND: cfg.s4,
         Stage.S5_SYNTHESIZE: cfg.s5,
         Stage.S6_RENDER: cfg.s6,
@@ -296,7 +297,37 @@ def understand_one(video_id: str, cfg: Config) -> bool:
     _apply_dedup(work, slides)   # 去重是衍生狀態，續跑必須重建（D22）
     transcript = Transcript.model_validate_json(work.transcript.read_text(encoding="utf-8"))
 
-    # ---- S4 理解（含 is_slide 判定與術語校正）----
+    # ---- S4a 投影片理解（逐張相異投影片，§4.7a）----
+    if not satisfied(Stage.S4A_SLIDES):
+        from .quota import QuotaExhausted, QuotaLedger
+        from .stages import slides as slides_stage
+        from .stages.providers import costs_quota
+
+        ledger = QuotaLedger(out.quota_db, cfg.quota)
+
+        def _record(spec, in_tok, out_tok, sid, status):
+            # 本地模型不佔額度——§6.5 的估算依實際配置而定
+            if costs_quota(spec):
+                ledger.record(spec, in_tok, out_tok, sid, status)
+
+        if costs_quota(cfg.s4a.model):
+            try:
+                ledger.check(planned_requests=1, model=cfg.s4a.model)
+            except QuotaExhausted as exc:
+                log.warning("S4a %s；停止本日處理，進度已保存（§6.1）", exc)
+                state.save(work.state)
+                return False
+
+        slides_stage.s4a_understand_slides(cfg, work, slides, on_call=_record)
+        state.mark_done(Stage.S4A_SLIDES, stage_params(cfg, Stage.S4A_SLIDES))
+        state.save(work.state)
+    else:
+        # 續跑：從快取重建投影片文字（D22——衍生狀態不能只在新算的那條路上做）
+        from .stages import slides as slides_stage
+
+        slides_stage.rehydrate(cfg, work, slides)
+
+    # ---- S4c 逐段理解 ----
     cloud.s4_understand(cfg, work, segments, slides, transcript)
     done = [s for s in segments if s.understanding is not None]
     state.understood_segments = [s.segment_id for s in done]

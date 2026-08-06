@@ -308,7 +308,12 @@ def test_blocks_citing_an_empty_transcript_are_dropped():
         }],
         "terms": [],
     }
-    understanding = to_understanding(raw, segment, S4Config())
+    # v0.4：is_slide 與 reject_reason 由 **S4a** 判定，透過 Slide 傳進來
+    from weft.ir import Slide
+
+    slide = Slide(slide_id="slide_001", image_path="03_slides/slide_001.png",
+                  t_first_seen=0.0, t_last_seen=2.0, reject_reason="片頭動畫")
+    understanding = to_understanding(raw, segment, S4Config(), slide_obj=slide)
     assert understanding.content_blocks == [], "來源為空的 block 應被丟棄"
     assert understanding.is_slide is False
     assert understanding.reject_reason == "片頭動畫"

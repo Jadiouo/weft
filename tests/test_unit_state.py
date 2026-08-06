@@ -58,10 +58,12 @@ def test_local_ocr_chain_is_gone():
     這條測試釘住「不要為了備用把它加回來」——留著就會有人去修它。
     術語校正改由 S4 完成。
 
-    **v0.4 新增 S1c（投影片去重）**——它是純 CV，與被移除的 OCR 鏈無關：
-    不讀文字、不需詞庫、不做繁簡轉換。加它進來不違反本測試的用意。
+    **v0.4 新增 S1c（投影片去重）與 S4a（投影片理解）**：
+    S1c 是純 CV（不讀文字、不需詞庫、不做繁簡轉換）；
+    S4a 是把 S4 原本的「讀投影片」職責拆出來，不是把本地 OCR 請回來。
     """
-    assert {s.value for s in Stage} == {"S0", "S1a", "S1b", "S1c", "S3", "S4", "S5", "S6"}
+    assert {s.value for s in Stage} == {"S0", "S1a", "S1b", "S1c", "S3",
+                                        "S4a", "S4", "S5", "S6"}
     # 被移除的三個階段不得以任何形式回來
     assert not {"S2", "S2b", "S2c"} & {s.value for s in Stage}
 

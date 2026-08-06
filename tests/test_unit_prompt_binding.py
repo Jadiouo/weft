@@ -1,4 +1,4 @@
-"""S4 的圖片↔區段綁定（D20）。
+"""S4c 的圖片↔區段綁定（D20）。
 
 v0.3 首跑把一整批的文字放前面、圖片全部裸接在後面，只靠一句「依序對應」。
 實測 49 個區段中 **15 個（30.6%）拿到隔壁那張圖的分析結果**，且每一個錯都
@@ -49,7 +49,7 @@ def test_segment_without_image_does_not_shift_the_others():
     body = build_parts(segs, None)[:-1]
 
     assert [k for _, k in body] == ["slide_001", None, "slide_003"]
-    assert "沒有代表畫面" in body[1][0]
+    assert "沒有投影片" in body[1][0]
 
 
 def test_prev_summary_is_a_separate_part_with_no_image():
@@ -75,3 +75,38 @@ def test_tail_instruction_forbids_cross_segment_image_use():
     tail, image_key = build_parts([_seg(0, "slide_001")], None)[-1]
     assert image_key is None
     assert "不要參考其他段的圖" in tail
+
+
+# ---------------------------------------------------------------------------
+# v0.4：S4a 產出的投影片文字掛進來後，預設不再送圖（§4.7c）
+# ---------------------------------------------------------------------------
+
+def test_slide_text_is_passed_as_text_not_image():
+    """投影片內容已由 S4a 文字化，S4c 再送一次圖只是重複，
+    而且會把 D20 的錯位風險帶回來。"""
+    seg = _seg(0, "slide_001")
+    seg.slide_ref = "slide_001"
+    parts = build_parts(
+        [seg], None,
+        slide_context={"slide_001": {"slide_text": "太上老君內觀經",
+                                     "description": "左右各一綠色直排方塊"}},
+        send_images=False,
+    )
+    text, image_key = parts[0]
+    assert image_key is None, "有投影片文字時不該再送圖"
+    assert "太上老君內觀經" in text
+    assert "左右各一綠色直排方塊" in text
+
+
+def test_send_images_still_binds_each_image_to_its_segment():
+    """設定明確要求送圖時，D20 的綁定規則仍然適用。"""
+    segs = [_seg(0, "slide_001"), _seg(1, "slide_002")]
+    body = build_parts(segs, None, slide_context=None, send_images=True)[:-1]
+    assert [k for _, k in body] == ["slide_001", "slide_002"]
+
+
+def test_segment_without_slide_context_falls_back_to_image():
+    """S4a 沒讀出東西（例如判定不是投影片）時，行為退回原本的送圖。"""
+    seg = _seg(0, "slide_001")
+    parts = build_parts([seg], None, slide_context={"slide_001": {}}, send_images=True)
+    assert parts[0][1] == "slide_001"
