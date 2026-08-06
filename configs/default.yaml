@@ -51,7 +51,8 @@ s3:
 # S4 聯合理解（§4.7）。唯一花額度的階段。
 s4:
   model: gemini-3.1-flash-lite
-  prompt_version: v1
+  # v2：D20 的圖片↔區段交錯綁定 + R13 的校正負面示例。改 prompt 必改此值。
+  prompt_version: v2
   batch_segments: 3
   prev_summary_max_chars: 200
   max_retries: 2

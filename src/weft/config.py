@@ -87,7 +87,10 @@ class S4Config(StageConfig):
     #: 2026-08-04 實測：`gemini-2.5-flash-lite` 對新使用者已停用（404
     #: "no longer available to new users"），雖然仍出現在 models.list()。
     model: str = "gemini-3.1-flash-lite"
-    prompt_version: str = "v1"
+    #: v2（2026-08-06）：D20 的圖片↔區段交錯綁定 + R13 的校正負面示例。
+    #: **改了 prompt 就必須改這個**——否則舊快取會被當成新結果讀回來。
+    #: v0.3 首跑的 07_understanding 是 v1，帶著 30.6% 的圖片錯位。
+    prompt_version: str = "v2"
     #: 可將 2–3 個相鄰 segment 併為一次呼叫，但輸出仍逐 segment 分開
     batch_segments: int = 3
     prev_summary_max_chars: int = 200

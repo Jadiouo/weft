@@ -14,6 +14,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 log = logging.getLogger(__name__)
@@ -214,14 +215,25 @@ class BatchResult:
     model_used: str
 
 
+@lru_cache(maxsize=1)
+def _cached_client(key: str):
+    """實際建立 client。**整個行程共用一個**——見 `_client` 的說明。"""
+    from google import genai
+
+    return genai.Client(api_key=key)
+
+
 def _client():
-    """建立 Gemini client。
+    """取得 Gemini client。
 
     只從 `GEMINI_API_KEY` / `GOOGLE_API_KEY` 取值。**不讀瀏覽器 cookie、
     不走 OAuth**——那是 §5.5 #12 禁止的訂閱額度繞道。
-    """
-    from google import genai
 
+    **共用單一實例**（D21）。原本每次呼叫都 `genai.Client(...)`，S4 跑完
+    17 個批次後那些 client 一起被 GC，關掉了底層共用的 httpx 傳輸層，
+    接著 S5 就拿到 `Cannot send a request, as the client has been closed`。
+    S4 的結果有保住（S5 失敗會降級繼續），但 `tldr` 與 `chapters` 是空的。
+    """
     key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
     if not key:
         raise ApiKeyMissing(
@@ -230,7 +242,7 @@ def _client():
             "SDD §2.3：額度來源固定為 API key；訂閱額度（AI Pro/Ultra）"
             "在架構上無法接入程式化呼叫，不得嘗試繞道。"
         )
-    return genai.Client(api_key=key)
+    return _cached_client(key)
 
 
 def seg_id_of(segments, image_key: str) -> str:
@@ -375,23 +387,68 @@ def validate_corrections(raw: dict, segment) -> list:
     return out
 
 
+def _replace_outside_existing(text: str, from_text: str, to_text: str) -> str:
+    """把 `from_text` 換成 `to_text`，但**跳過已經是 `to_text` 一部分的位置**。
+
+    D22 的第二個 bug：`未 → 未來` 用 `str.replace` 會把**已經正確的**
+    「未來」裡的「未」也換掉——「現在、過去、未來」變成「未來來」。
+    這類「截斷補全」的校正（R13 判定為合法）只要 `from` 是 `to` 的子字串，
+    全域取代就必然過度套用。
+
+    作法：先標出文字中所有既有的 `to_text` 位置當保護區，
+    只取代保護區**之外**的 `from_text`。
+
+    這同時保證冪等——套用結果本身不含保護區外的 `from_text`，再跑一次不會變。
+    """
+    if from_text not in to_text:
+        return text.replace(from_text, to_text)
+
+    protected: list[tuple[int, int]] = []
+    start = 0
+    while (i := text.find(to_text, start)) != -1:
+        protected.append((i, i + len(to_text)))
+        start = i + len(to_text)
+
+    out: list[str] = []
+    pos = 0
+    while pos < len(text):
+        i = text.find(from_text, pos)
+        if i == -1:
+            out.append(text[pos:])
+            break
+        end = i + len(from_text)
+        inside = any(a <= i and end <= b for a, b in protected)
+        out.append(text[pos:i])
+        out.append(from_text if inside else to_text)
+        pos = end
+    return "".join(out)
+
+
 def apply_corrections(transcript, segment, corrections) -> None:
     """把校正套用到該 segment 涵蓋的逐字稿句子上。
 
     **只改 `text_corrected`，`text_raw` 永不覆寫**（§4.5 約束 3、§5.3 不變量 9）。
     套用後重建 `segment.transcript_corrected`，讓 segment 與 cue 兩層一致——
     不一致的話 §5.4 的溯源檢查會拿到與 debug markdown 不同的文字。
+
+    **一律從 `text_raw` 重新推導，不在 `text_corrected` 上疊加**（D22）。
+    原本是 `text = cue.text_corrected or cue.text_raw`，續跑時等於在已校正的
+    文字上再套一次：`未→未來` 跑第二次會變成 `未來來`、第三次 `未來來來`。
+    實測第二次跑同一支影片，溯源通過率從 98.6% 掉到 47.9%。
+    `text_corrected` 必須是 `text_raw + corrections` 的**純函數**——
+    這樣重跑幾次都一樣，才符合 §6.3 的續跑要求。
     """
     by_index = {c.index: c for c in transcript.cues}
     for index in segment.cue_indices:
         cue = by_index.get(index)
         if cue is None:
             continue
-        text = cue.text_corrected or cue.text_raw
+        text = cue.text_raw
         applied = []
         for correction in corrections:
             if correction.from_text in cue.text_raw:
-                text = text.replace(correction.from_text, correction.to_text)
+                text = _replace_outside_existing(
+                    text, correction.from_text, correction.to_text)
                 applied.append(correction)
         cue.text_corrected = text
         cue.corrections = applied

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 
 from ..config import Config
-from ..ir import Chunk, Segment, Slide, Understanding, VideoIR
+from ..ir import Chunk, Segment, SegmentMode, Slide, Understanding, VideoIR
 from ..paths import OutPaths, WorkPaths
 from . import pending
 
@@ -39,7 +39,6 @@ def s4_understand(
     冪等鍵：segment_id + prompt_version + model
     失敗行為：單一 segment 失敗 → 重試 2 次（指數退避）→ understanding=null，繼續
     """
-    from ..ir import SegmentMode
     from ..quota import QuotaExhausted, QuotaLedger
     from .understand import (
         ApiKeyMissing,
@@ -65,6 +64,13 @@ def s4_understand(
         # 續跑：整批都已有結果就直接讀檔，不重複花額度（§6.3）
         cached = [_load_cached(work, seg, p) for seg in batch]
         if all(c is not None for c in cached):
+            # 快取命中也要**重建衍生狀態**（D22）。原本這裡直接 continue，
+            # 於是續跑時 `mode` 降級與 `text_corrected` 都沿用磁碟上的舊值——
+            # 前一次若寫壞了就永遠壞著。衍生狀態必須是快取的純函數。
+            for seg, understanding in zip(batch, cached, strict=True):
+                if understanding is None:
+                    continue
+                _apply_to_segment(seg, understanding, by_slide_id, transcript)
             results += [c for c in cached if c is not None]
             prev_summary = results[-1].summary if results else prev_summary
             continue
@@ -126,24 +132,7 @@ def s4_understand(
                 seg.understanding = None
                 continue
             understanding = to_understanding(raw, seg, p)
-            seg.understanding = understanding
-
-            # VLM 判定不是投影片 → 降級。slide_ref 清掉（沒有投影片可指向），
-            # candidate_ref 保留，讓 debug markdown 還能顯示被拒絕的那張圖。
-            if not understanding.is_slide:
-                seg.mode = SegmentMode.SPEAKER_ONLY
-                seg.slide_ref = None
-                log.info("%s：VLM 判定不是投影片（%s）", seg.segment_id,
-                         understanding.reject_reason or "未說明")
-            elif seg.slide_ref and understanding.slide_text:
-                # VLM 讀出的投影片文字是 §5.4 溯源檢查的比對來源
-                slide = by_slide_id.get(seg.slide_ref)
-                if slide is not None:
-                    slide.slide_text = understanding.slide_text
-                    slide.layout_description = understanding.layout_description
-
-            if understanding.corrections and transcript is not None:
-                apply_corrections(transcript, seg, understanding.corrections)
+            _apply_to_segment(seg, understanding, by_slide_id, transcript)
 
             results.append(understanding)
             prev_summary = understanding.summary[: p.prev_summary_max_chars]
@@ -155,6 +144,35 @@ def s4_understand(
              work.video_id, len(results), len(segments), confirmed, corrected,
              ledger.summary(p.model))
     return results
+
+
+def _apply_to_segment(seg, understanding, by_slide_id, transcript) -> None:
+    """把一份 Understanding 的效果套到 segment / slide / transcript 上。
+
+    **快取命中與新呼叫都要走這裡**（D22）。這些都是 Understanding 的
+    衍生狀態，必須可以從快取重建；只在「新呼叫」那條路上做的話，
+    續跑會沿用磁碟上的舊值，前一次寫壞了就永遠壞著。
+    """
+    from .understand import apply_corrections
+
+    seg.understanding = understanding
+
+    # VLM 判定不是投影片 → 降級。slide_ref 清掉（沒有投影片可指向），
+    # candidate_ref 保留，讓 debug markdown 還能顯示被拒絕的那張圖。
+    if not understanding.is_slide:
+        seg.mode = SegmentMode.SPEAKER_ONLY
+        seg.slide_ref = None
+        log.info("%s：VLM 判定不是投影片（%s）", seg.segment_id,
+                 understanding.reject_reason or "未說明")
+    elif seg.slide_ref and understanding.slide_text:
+        # VLM 讀出的投影片文字是 §5.4 溯源檢查的比對來源
+        slide = by_slide_id.get(seg.slide_ref)
+        if slide is not None:
+            slide.slide_text = understanding.slide_text
+            slide.layout_description = understanding.layout_description
+
+    if understanding.corrections and transcript is not None:
+        apply_corrections(transcript, seg, understanding.corrections)
 
 
 def _index_of(work: WorkPaths, segment: Segment) -> int:

@@ -202,3 +202,89 @@ def test_authorized_correction_passes_end_to_end():
     out = validate_corrections(raw, seg)
     assert len(out) == 1
     assert (out[0].from_text, out[0].to_text) == ("時運", "識蘊")
+
+
+# ---------------------------------------------------------------------------
+# D22：套用校正必須冪等
+#
+# 首次實跑後重跑同一支影片，溯源通過率從 98.6% 掉到 47.9%——
+# `未→未來` 被重複套用成 `未來來`、`未來來來`。
+# ---------------------------------------------------------------------------
+
+def test_applying_corrections_twice_gives_the_same_text():
+    from weft.ir import Transcript, TranscriptCue, TranscriptSource
+    from weft.stages.understand import apply_corrections
+
+    cue = TranscriptCue(index=0, t_start=0.0, t_end=5.0, text_raw="現在、過去、未")
+    transcript = Transcript(video_id="vid", source=TranscriptSource.MANUAL_CAPTION,
+                            cues=[cue], raw_hash="x")
+    seg = _segment("現在、過去、未")
+    seg.cue_indices = [0]
+
+    corrections = validate_corrections(
+        {"corrections": [{"from": "未", "to": "未來", "reason": "後文已補全"}]}, seg)
+    assert len(corrections) == 1
+
+    apply_corrections(transcript, seg, corrections)
+    once = cue.text_corrected
+    assert once == "現在、過去、未來"
+
+    apply_corrections(transcript, seg, corrections)
+    assert cue.text_corrected == once, "重複套用改變了結果——§6.3 的續跑會壞掉"
+
+    apply_corrections(transcript, seg, corrections)
+    assert cue.text_corrected == once
+
+
+def test_corrected_text_is_a_pure_function_of_raw():
+    """`text_corrected` 帶著舊值進來時，必須被重新推導而不是疊加。"""
+    from weft.ir import Transcript, TranscriptCue, TranscriptSource
+    from weft.stages.understand import apply_corrections
+
+    cue = TranscriptCue(index=0, t_start=0.0, t_end=5.0, text_raw="查憍梵钵提")
+    cue.text_corrected = "查憍梵波提"  # 前一次執行留下的
+    transcript = Transcript(video_id="vid", source=TranscriptSource.MANUAL_CAPTION,
+                            cues=[cue], raw_hash="x")
+    seg = _segment("查憍梵钵提")
+    seg.cue_indices = [0]
+
+    corrections = validate_corrections(
+        {"corrections": [{"from": "憍梵钵提", "to": "憍梵波提", "reason": "異體字"}]}, seg)
+    apply_corrections(transcript, seg, corrections)
+    assert cue.text_corrected == "查憍梵波提"
+    assert cue.text_raw == "查憍梵钵提", "§4.5 約束 3：text_raw 永不覆寫"
+
+
+# ---------------------------------------------------------------------------
+# D22 第二個 bug：`from` 是 `to` 的子字串時，全域取代會弄壞已經正確的文字
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        pytest.param("現在、過去、未來", "現在、過去、未來", id="已經正確-不可動"),
+        pytest.param("一個就是未 這個叫未來", "一個就是未來 這個叫未來", id="一對一錯"),
+        pytest.param("帶未來能用的", "帶未來能用的", id="全對"),
+        pytest.param("未", "未來", id="只有錯的"),
+    ],
+)
+def test_truncation_completion_does_not_corrupt_correct_text(raw, expected):
+    from weft.stages.understand import _replace_outside_existing
+
+    assert _replace_outside_existing(raw, "未", "未來") == expected
+
+
+def test_replacement_is_idempotent_for_substring_corrections():
+    from weft.stages.understand import _replace_outside_existing
+
+    once = _replace_outside_existing("一個就是未 這個叫未來", "未", "未來")
+    twice = _replace_outside_existing(once, "未", "未來")
+    assert once == twice == "一個就是未來 這個叫未來"
+
+
+def test_ordinary_correction_still_replaces_everywhere():
+    """`from` 不是 `to` 的子字串時，行為不變——全部換掉。"""
+    from weft.stages.understand import _replace_outside_existing
+
+    assert _replace_outside_existing(
+        "查憍梵钵提，憍梵钵提尊者", "憍梵钵提", "憍梵波提") == "查憍梵波提，憍梵波提尊者"
