@@ -41,6 +41,17 @@ class S1aConfig(StageConfig):
     language: str = "zh"
     beam_size: int = 5
     vad_filter: bool = True
+    #: OpenCC 設定檔，用於把 **ASR 輸出**轉成繁體；`None` 關閉。
+    #: 實測 Whisper large-v3 對這批繁體素材輸出 9.43% 簡體字，
+    #: 使 §5.4 溯源通過率從 97.2% 掉到 91.5%（R18）。
+    #: 用 `s2tw` 而不是 `s2t` 或 `s2twp`（D24）：
+    #:   - `s2t` 產出大陸標準字形（`爲`×71、`裏`×35、`纔`、`着`、`喫`），
+    #:     與台灣素材的 `為`/`裡`/`才`/`著`/`吃` 對不起來
+    #:   - `s2twp` 額外做**詞彙**替換，實測把 `局部`→`區域性`、`運`→`執`、
+    #:     `序`→`式`——那是改語意不是轉字集
+    #:   - `s2tw` 給台灣字形且不動詞彙，正好是要的
+    #: **只作用於 ASR**（Whisper 與自動字幕），手動字幕不轉。
+    asr_script_conversion: str | None = "s2tw"
 
 
 class S1bConfig(StageConfig):

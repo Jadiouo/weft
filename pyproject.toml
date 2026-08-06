@@ -19,6 +19,9 @@ dependencies = [
     # 不用於產生校正。與 v0.2 被移除的那套「詞庫 → 拼音 → 比對」的
     # 生成鏈是兩回事，見 docs/decisions.md D19。
     "pypinyin>=0.51",
+    # R18：把 ASR 輸出的簡體轉成繁體。實測值 5.6 個百分點的溯源通過率，
+    # 見 experiments/r18_whisper_impact/REPORT.md 與 docs/decisions.md D24。
+    "opencc-python-reimplemented>=0.1.7",
 ]
 
 [project.optional-dependencies]

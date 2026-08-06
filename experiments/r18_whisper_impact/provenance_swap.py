@@ -8,7 +8,7 @@
 三組對照：
   A. 人工字幕（現況基準，98.6%）
   B. Whisper 原樣（**簡體**）
-  C. Whisper 轉繁（s2twp）
+  C. Whisper 轉繁（s2tw）
 
 B 與 C 的差距就是**繁簡造成的**；A 與 C 的差距是**辨識錯誤造成的**。
 兩者分開才知道該修哪個。
@@ -30,7 +30,7 @@ from weft.validation.provenance import check_block, resolve_source
 
 HERE = Path(__file__).parent
 WORK = Path("work/zIglvjoU9vo")
-CC = OpenCC("s2twp")
+CC = OpenCC("s2tw")
 
 
 def whisper_text_for(cues, t0: float, t1: float, convert: bool) -> str:

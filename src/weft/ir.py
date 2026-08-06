@@ -152,6 +152,11 @@ class Transcript(Strict):
     alt_cues: list[TranscriptCue] | None = None  # §4.2 策略 3 的交叉檢查用
     model: str | None = None
     params_hash: str | None = None
+    #: 若 ASR 輸出經過簡繁轉換，記下用的 OpenCC 設定（例如 `"s2twp"`）。
+    #: `text_raw` 存的是**轉換後**的文字——轉換發生在建立 Transcript 之前，
+    #: 所以不違反「`text_raw` 永不覆寫」（§5.3 不變量 9）。
+    #: 記在這裡是為了讓「這份逐字稿被動過字集」這件事可稽核（D24）。
+    script_conversion: str | None = None
 
     @staticmethod
     def compute_raw_hash(cues: list[TranscriptCue]) -> str:

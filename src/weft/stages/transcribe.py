@@ -78,6 +78,28 @@ def _dedupe_rolling(cues: list[tuple[float, float, str]]) -> list[tuple[float, f
     return out
 
 
+def to_traditional(
+    rows: list[tuple[float, float, str]], config: str | None
+) -> list[tuple[float, float, str]]:
+    """把 ASR 產出的簡體轉成繁體。`config` 為 `None` 時原樣回傳。
+
+    **只用於 ASR 輸出**（Whisper、YouTube 自動字幕），不用於手動字幕——
+    ASR 的字集是模型產物，手動字幕是作者的選擇（D24）。
+
+    實測依據（R18）：Whisper large-v3 對這批繁體素材輸出 9.43% 簡體字，
+    §5.4 溯源通過率因此從 97.2% 掉到 91.5%。轉換值 5.6 個百分點，
+    且對本來就是繁體的文字是 no-op。
+
+    設定值用 `s2tw`（台灣字形、不動詞彙）——理由見 `S1aConfig` 的註解。
+    """
+    if not config:
+        return rows
+    from opencc import OpenCC
+
+    cc = OpenCC(config)
+    return [(a, b, cc.convert(t)) for a, b, t in rows]
+
+
 def whisper_transcribe(video: Path, cfg, initial_prompt: str | None) -> list[tuple[float, float, str]]:
     """faster-whisper。SDD §4.2 策略 2。
 

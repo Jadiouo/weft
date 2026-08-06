@@ -70,7 +70,7 @@ def s1a_transcript(cfg: Config, work: WorkPaths) -> Transcript:
     失敗行為：Whisper OOM → 降 batch size 重試一次 → 仍失敗標記 failed 並繼續
     """
     from ..ir import Transcript, TranscriptCue, TranscriptSource, VideoMeta
-    from .transcribe import parse_vtt, whisper_transcribe
+    from .transcribe import parse_vtt, to_traditional, whisper_transcribe
 
     meta = VideoMeta.model_validate_json(work.meta.read_text(encoding="utf-8"))
     p = cfg.s1a
@@ -82,8 +82,10 @@ def s1a_transcript(cfg: Config, work: WorkPaths) -> Transcript:
         ]
 
     alt_cues = None
+    converted = None
     if meta.has_manual_caption and work.captions.exists():
         # 策略 1：手動字幕是人打的，品質遠高於任何 ASR
+        # **不做簡繁轉換**——手動字幕的字集是作者的選擇（D24）。
         rows = parse_vtt(work.captions)
         source, model = TranscriptSource.MANUAL_CAPTION, None
         log.info("S1a %s：採用手動字幕，%d 句", work.video_id, len(rows))
@@ -94,9 +96,15 @@ def s1a_transcript(cfg: Config, work: WorkPaths) -> Transcript:
         # 文言文 ASR 的錯字改由 S4 對照投影片修正（known-risks R11）。
         rows = whisper_transcribe(work.video, cfg, None)
         source, model = TranscriptSource.WHISPER, p.whisper_model
+        # ASR 的字集是模型產物，統一轉成繁體再往下走（D24／R18）
+        rows = to_traditional(rows, p.asr_script_conversion)
+        converted = p.asr_script_conversion
         if meta.has_auto_caption and work.captions.exists():
-            alt_cues = to_cues(parse_vtt(work.captions))
-        log.info("S1a %s：Whisper %s，%d 句", work.video_id, p.whisper_model, len(rows))
+            # 自動字幕同樣是 ASR，一併轉
+            alt_cues = to_cues(to_traditional(parse_vtt(work.captions),
+                                              p.asr_script_conversion))
+        log.info("S1a %s：Whisper %s，%d 句%s", work.video_id, p.whisper_model,
+                 len(rows), f"（已轉繁 {converted}）" if converted else "")
 
     if not rows:
         raise RuntimeError(f"{work.video_id} 產生不出任何逐字稿")
@@ -111,6 +119,7 @@ def s1a_transcript(cfg: Config, work: WorkPaths) -> Transcript:
         alt_cues=alt_cues,
         model=model,
         params_hash=p.params_hash(),
+        script_conversion=converted,
     )
     work.transcript.write_text(transcript.model_dump_json(indent=2), encoding="utf-8")
     return transcript
