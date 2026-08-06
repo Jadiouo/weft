@@ -234,6 +234,14 @@ class Slide(Strict):
     t_last_seen: Seconds
     is_progressive_final: bool = False
     build_frames: list[Seconds] = Field(default_factory=list)
+    #: 這張投影片出現過的**所有**時間區間（S1c 去重後，§4.3b）。
+    #: 未跑去重時為單一區間 `[(t_first_seen, t_last_seen)]`——
+    #: 下游可以無條件依賴它，不必判斷有沒有去重過。
+    occurrences: list[tuple[Seconds, Seconds]] = Field(default_factory=list)
+    #: 被判為同一張時，指向代表幀的 `slide_id`；代表幀自己為 `None`。
+    #: **被合併的候選幀不刪除**——§5.6 的人工抽檢要能複核
+    #: 「這兩張真的是同一張嗎」。
+    duplicate_of: str | None = None
     #: 投影片上的文字，由 **S4 的 VLM** 讀出（v0.3 之前是本地 OCR）。
     #: 這同時是 §5.4 溯源檢查對 slide_ocr 型 block 的比對來源——
     #: 因此 prompt 必須要求 VLM **先逐字轉錄、再詮釋**，見 known-risks R9。

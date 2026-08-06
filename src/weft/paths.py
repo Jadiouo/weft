@@ -48,6 +48,11 @@ class WorkPaths:
 
     # S1a
     @property
+    def dedup(self) -> Path:
+        #: S1c 去重結果（§4.3b）。用 04 這個空號——S2 於 v0.3 移除後留下的。
+        return self.dir / "04_dedup.json"
+
+    @property
     def transcript(self) -> Path:
         return self.dir / "05_transcript.json"
 

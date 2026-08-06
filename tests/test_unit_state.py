@@ -43,17 +43,27 @@ def test_s0_is_the_only_root():
 
 
 def test_s3_depends_on_both_transcript_and_candidates():
-    """§4.6：對齊需要逐字稿與候選區段兩者。"""
-    assert set(DEPENDENCIES[Stage.S3_ALIGN]) == {Stage.S1A_TRANSCRIPT, Stage.S1B_SLIDES}
+    """§4.6：對齊需要逐字稿與候選區段兩者。
+
+    v0.4 起候選那一側是 **S1c**（去重後）而非 S1b——S3 指派逐字稿時
+    要用去重後的結果，否則同一張投影片的多次出現會被當成不同的段落來源。
+    """
+    assert set(DEPENDENCIES[Stage.S3_ALIGN]) == {Stage.S1A_TRANSCRIPT, Stage.S1C_DEDUP}
+    assert set(DEPENDENCIES[Stage.S1C_DEDUP]) == {Stage.S1B_SLIDES}
 
 
 def test_local_ocr_chain_is_gone():
     """v0.3 移除了 S2／S2b／S2c（本地 OCR + 詞庫 + 術語校正）。
 
     這條測試釘住「不要為了備用把它加回來」——留著就會有人去修它。
-    術語校正改由 S4 在同一次呼叫中完成（VLM 同時看到投影片圖與逐字稿）。
+    術語校正改由 S4 完成。
+
+    **v0.4 新增 S1c（投影片去重）**——它是純 CV，與被移除的 OCR 鏈無關：
+    不讀文字、不需詞庫、不做繁簡轉換。加它進來不違反本測試的用意。
     """
-    assert {s.value for s in Stage} == {"S0", "S1a", "S1b", "S3", "S4", "S5", "S6"}
+    assert {s.value for s in Stage} == {"S0", "S1a", "S1b", "S1c", "S3", "S4", "S5", "S6"}
+    # 被移除的三個階段不得以任何形式回來
+    assert not {"S2", "S2b", "S2c"} & {s.value for s in Stage}
 
 
 def test_prepare_and_understand_partition_all_stages():

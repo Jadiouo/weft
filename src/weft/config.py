@@ -76,6 +76,25 @@ class S1bConfig(StageConfig):
     progressive_containment_ratio: float = 0.70
 
 
+class S1cConfig(StageConfig):
+    """投影片去重。SDD §4.3b（v0.4 新增）。純本地 CV，不花額度。"""
+
+    enabled: bool = True
+    #: 與全片中位幀的距離低於此值即視為攝影棚定鏡。
+    #: 實測分離 **6.7x**（攝影棚定鏡最高 0.042、真投影片最低 0.281），
+    #: 取中間偏保守側。**零漏抓**。
+    studio_distance: float = 0.10
+    #: ink Jaccard 單連結的合併門檻。實測 0.20–0.40 結果**完全相同**，
+    #: 且沒有任何一群混到不同類別——間隙是素材本身的，不是調出來的。
+    jaccard_threshold: float = 0.30
+    #: 中位幀的取樣間隔。實測 2519 幀取 1/4 與全讀結果一致。
+    median_stride: int = 4
+    #: 最大群的佔比上限。超過即判定門檻過鬆，**跳過去重**而非自動調參
+    #: （§5.5 #4）。0.9 是保護性上限，不是校準值——正常素材的最大群
+    #: 實測佔 17/21（0.81，攝影棚定鏡那群，但它在第 1 道就被剔除了）。
+    max_group_ratio: float = 0.9
+
+
 class S3Config(StageConfig):
     """對齊。SDD §4.6。
 
@@ -234,6 +253,7 @@ class Config(BaseModel):
     s0: S0Config = Field(default_factory=S0Config)
     s1a: S1aConfig = Field(default_factory=S1aConfig)
     s1b: S1bConfig = Field(default_factory=S1bConfig)
+    s1c: S1cConfig = Field(default_factory=S1cConfig)
     s3: S3Config = Field(default_factory=S3Config)
     s4: S4Config = Field(default_factory=S4Config)
     s4b: S4bConfig = Field(default_factory=S4bConfig)

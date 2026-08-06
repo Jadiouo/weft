@@ -14,6 +14,7 @@ import logging
 from .config import Config
 from .ir import CandidateSet, Slide, Transcript, VideoMeta
 from .paths import OutPaths, WorkPaths
+from .stages import dedup
 from .state import Stage, StageStatus, VideoState
 
 log = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ def stage_params(cfg: Config, stage: Stage) -> str:
         Stage.S0_FETCH: cfg.s0,
         Stage.S1A_TRANSCRIPT: cfg.s1a,
         Stage.S1B_SLIDES: cfg.s1b,
+        Stage.S1C_DEDUP: cfg.s1c,
         Stage.S3_ALIGN: cfg.s3,
         Stage.S4_UNDERSTAND: cfg.s4,
         Stage.S5_SYNTHESIZE: cfg.s5,
@@ -116,6 +118,20 @@ def prepare_one(
         state.mark_done(Stage.S1B_SLIDES, stage_params(cfg, Stage.S1B_SLIDES))
         state.save(work.state)
 
+    # ---- S1c 投影片去重（§4.3b，純本地）----
+    if satisfied(Stage.S1C_DEDUP) and work.dedup.exists():
+        _apply_dedup(work, slides)
+    else:
+        stats = dedup.s1c_dedup(cfg, work, slides, candidates)
+        work.dedup.write_text(json.dumps(
+            {"stats": stats,
+             "slides": {s.slide_id: {"duplicate_of": s.duplicate_of,
+                                     "occurrences": [list(o) for o in s.occurrences]}
+                        for s in slides}},
+            ensure_ascii=False, indent=1), encoding="utf-8")
+        state.mark_done(Stage.S1C_DEDUP, stage_params(cfg, Stage.S1C_DEDUP))
+        state.save(work.state)
+
     # ---- S1a 逐字稿 ----
     if satisfied(Stage.S1A_TRANSCRIPT) and work.transcript.exists():
         transcript = Transcript.model_validate_json(work.transcript.read_text(encoding="utf-8"))
@@ -131,6 +147,23 @@ def prepare_one(
         state.save(work.state)
 
     return state
+
+
+def _apply_dedup(work: WorkPaths, slides: list[Slide]) -> None:
+    """把落地的 S1c 結果套回 Slide 物件（續跑用）。
+
+    去重是**衍生狀態**，續跑時必須重建而不是沿用預設值——D22 記的教訓：
+    只在「新計算」那條路上做的話，續跑會拿到未去重的 slides。
+    """
+    if not work.dedup.exists():
+        return
+    data = json.loads(work.dedup.read_text(encoding="utf-8")).get("slides", {})
+    for slide in slides:
+        row = data.get(slide.slide_id)
+        if not row:
+            continue
+        slide.duplicate_of = row.get("duplicate_of")
+        slide.occurrences = [tuple(o) for o in row.get("occurrences") or []]
 
 
 def _slides_from(work: WorkPaths, candidates: CandidateSet) -> list[Slide]:
@@ -260,6 +293,7 @@ def understand_one(video_id: str, cfg: Config) -> bool:
     ]
     candidates = CandidateSet.model_validate_json(work.candidates.read_text(encoding="utf-8"))
     slides = _slides_from(work, candidates)
+    _apply_dedup(work, slides)   # 去重是衍生狀態，續跑必須重建（D22）
     transcript = Transcript.model_validate_json(work.transcript.read_text(encoding="utf-8"))
 
     # ---- S4 理解（含 is_slide 判定與術語校正）----
