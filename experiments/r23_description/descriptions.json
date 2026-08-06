@@ -1,0 +1,14 @@
+{
+ "ollama:gemma3:12b|zIglvjoU9vo/slide_029": "畫面為一個對照表格，左欄標題為「時間」，右欄標題為「色」，上方有總標題「大上老君內觀經」以及一段文字描述天地陰陽的生化過程。左欄以綠色列出月份與相應的變化，例如一月為胞、二月成胎等，並在每個月份後方用顏色標示其狀態。右欄則以漸變色表示神靈的變化階段，從紅色到黃色再到綠色，代表著逐漸成熟和完善的過程。表格下方有一段文字說明元氣與哺育的重要性。",
+ "ollama:gemma3:12b|zIglvjoU9vo/slide_045": "這是一張投影片，上方為標題《月陽神為三魂，動而生也》，下方為文字說明。文字內容分為多段落，描述了天魂、地魂、人魂的概念以及生命與種子的關係。右側有一張男性臉部的照片，佔據畫面約三分之一的空間，照片中的人物正在凝視前方。",
+ "ollama:gemma3:12b|zIglvjoU9vo/slide_041": "The image is a diagram illustrating the stages of mouse embryonic development. The left side depicts a cyclical process starting with an adult mouse, progressing through fertilization, cleavage, blastocyst formation, implantation, gastrulation, organogenesis, and culminating in birth and fetal growth. A timeline indicates days after fertilization along a curved line. The right side shows sequential images of the developing embryo at various stages from fertilized egg to 9 months, arranged chronologically.",
+ "ollama:gemma3:12b|C_CFyilE-ks/slide_012": "畫面分為三個顏色區塊：上方為黃色，中間為粉紅色，下方為藍色。每個顏色區塊都包含文字內容，呈現一種層次結構。黃色區域描述了陽氣和陰氣的上下運行關係；粉紅色區域說明了天與地、以及人體經絡的陰陽關係；藍色區域總結了人在天地間，轉動天地陰陽的概念。",
+ "ollama:gemma4:12b|zIglvjoU9vo/slide_029": "這是一張教學投影片。標題為「太上老君丙觀經」。上方有兩行引言文字。中間部分是核心內容：列出從一月到十月的發展過程，每項包含兩個對應的描述（如「一月為胞」與「精血凝也」）。頁面左右兩側各有一個綠色的垂直長條框，左側標註「時間軸、色身漸完成」，右側標註「色漸成，功能漸齊備」。此外，從右側綠色框指向中間內容區塊有一支向左的箭頭。",
+ "ollama:gemma4:12b|zIglvjoU9vo/slide_045": "這是一張教學投影片。頁面背景為黃色。上方區域包含四行文字：前兩行為藍色，後兩行分別為黑色與橘紅色；下方由一條橫線分隔。下半部左側為一段關於「生命」與「種子」的解釋性段落；右側對應位置是一張人體軀幹的解剖示意圖，其中胸腔區域（心臟部位）被標示為紅色的圓形區塊。最底部有一行橘紅色的總結文字，並在右下角標註頁碼 11。",
+ "ollama:gemma4:12b|zIglvjoU9vo/slide_041": "這張投影片呈現胚胎發育的過程。畫面左側為流程圖，描述從「Adult」到「Birth」的生物學發展階段（如 Fertilized、Cleavage、Blastocyst、Implantation、Gastrulation、Turning、Organogenesis）。中間是一個圓形的時鐘狀圖表，標註為「Days after fertilization」，並用數字 0 到 18 標示發育初期的天數。右側是 4x4 的圖像網格，展示胚胎從受精卵到 9 個月大的實體形態變化，每張圖片下方對應其發育時間（如「3 DAY」至「9 MONTHS」）。左側的流程圖與中間的時鐘提供理論架構與時間軸，右側的網格則提供具體的視覺對照。",
+ "ollama:gemma4:12b|C_CFyilE-ks/slide_012": "畫面由上下兩個對比鮮明的色塊組成。上方是一個黃底紅字的矩形框，內容在解釋「陽」與「陰」的運行規律及臟腑分類；下方是一個青藍色背景的矩形框，內容將上述概念延伸至宏觀的天地對應關係。兩者透過顏色區分出微觀生理與宏觀哲學兩個層次的論述。",
+ "ollama:qwen2.5vl:7b|zIglvjoU9vo/slide_029": "這張圖是一張投影片，背景為粉紅色。左側有一個綠色的箭頭指向右側，標註“時間軸、色身漸完成”。右側也有一个綠色的箭頭指向左側，標註“色漸成、功能漸齊備”。圖中文字描述了太上老君內觀經中的內容，從一月到十月的胎生過程以及元和哺食的階段。",
+ "ollama:qwen2.5vl:7b|zIglvjoU9vo/slide_045": "這張投影片的背景是黃色，文字主要為藍色和紅色。左側的文字描述了生命與種子之間的關係，提到天魂、地魂和人魂的概念以及阿賴耶識的種子搬家完成。右側有一個插圖，顯示一個手部的穴位或經絡點，標註有紅色圓圈，可能代表特定的生命力或能量點。",
+ "ollama:qwen2.5vl:7b|zIglvjoU9vo/slide_041": "這張圖展示了老鼠從受精卵到成年鼠的發育過程。左側是老鼠的生命周期，包括受精卵、分裂（Cleavage）、囊胚（Blastocyst）、植入（Implantation）、原腸化（Gastrulation）和轉向（Turning），以及器官發生（Organogenesis）。右側則展示了從受精卵到9個月大胚胎的發育階段，每個階段標註了對應的月份。",
+ "ollama:qwen2.5vl:7b|C_CFyilE-ks/slide_012": "這張投影片由兩個主要部分組成。上半部背景為黃色，文字為紅色；下半部背景為藍色，文字同樣為紅色。兩部分分別描述了陽氣和陰氣在體內的運行方式以及人與天地之間的關係。"
+}
