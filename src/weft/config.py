@@ -122,6 +122,14 @@ class S4aConfig(StageConfig):
     #:   slide_text   qwen2.5vl 4.9% < gemma3 7.9% < gemma4 37.8%
     #: **兩項的最佳模型不同**，這正是逐子階段可設定的理由。
     model: str = "gemini:gemini-3.1-flash-lite"
+    #: **分類另用一個模型**（§2.3 的 S4a-1）。`None` 表示與 `model` 同一個。
+    #:
+    #: 存在的理由是實測（R21 + 本機端到端）：分類與轉錄的最佳模型不同，
+    #: 而且**分類錯的代價比轉錄錯高**——把講者鏡頭判成投影片，
+    #: 攝影棚佈景的書法就成了 §5.4 的「合法來源」，後面所有引用它的
+    #: block 都會拿假來源去驗證。實跑 qwen2.5vl 單模型時 7 個誤報，
+    #: 溯源未通過比例 24.3%。
+    classifier_model: str | None = None
     prompt_version: str = "v1"
     max_retries: int = 2
     retry_backoff_sec: float = 4.0
@@ -144,7 +152,7 @@ class S4Config(StageConfig):
     #: v3（2026-08-06）：拆出 S4a 後，本階段不再負責 is_slide 與 slide_text。
     #: **改了 prompt 就必須改這個**——否則舊快取會被當成新結果讀回來。
     #: v0.3 首跑的 07_understanding 是 v1，帶著 30.6% 的圖片錯位。
-    prompt_version: str = "v3"
+    prompt_version: str = "v4"
     #: 可將 2–3 個相鄰 segment 併為一次呼叫，但輸出仍逐 segment 分開
     batch_segments: int = 3
     prev_summary_max_chars: int = 200

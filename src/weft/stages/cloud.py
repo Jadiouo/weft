@@ -40,6 +40,7 @@ def s4_understand(
     失敗行為：單一 segment 失敗 → 重試 2 次（指數退避）→ understanding=null，繼續
     """
     from ..quota import QuotaExhausted, QuotaLedger
+    from .providers import costs_quota
     from .understand import (
         ApiKeyMissing,
         PermanentApiError,
@@ -52,6 +53,9 @@ def s4_understand(
 
     p = cfg.s4
     ledger = QuotaLedger(OutPaths(cfg.out_dir).quota_db, cfg.quota)
+    #: 本地模型不佔雲端額度（§2.3、§6.5）。**不能無條件記帳**——
+    #: 實測全本地配置跑到一半被自己的帳本判定「額度用盡」而停下。
+    metered = costs_quota(p.model)
     work.understanding_dir.mkdir(parents=True, exist_ok=True)
 
     by_slide_id = {s.slide_id: s for s in slides}
@@ -81,16 +85,17 @@ def s4_understand(
             continue
 
         # §6.1 主動節流：呼叫**前**估算，不靠撞 429（§5.5 #13）
-        try:
-            ledger.check(planned_requests=1, model=p.model)
-        except QuotaExhausted as exc:
-            log.warning("%s；停止本日處理，進度已保存（§6.1）", exc)
-            break
+        if metered:
+            try:
+                ledger.check(planned_requests=1, model=p.model)
+            except QuotaExhausted as exc:
+                log.warning("%s；停止本日處理，進度已保存（§6.1）", exc)
+                break
 
         # 每一次**實際 API 呼叫**都要記帳，不是每個批次記一次——重試也
         # 消耗配額。v0.3 首跑時記「批次」，帳本顯示 17 次而實際打了 45+ 次。
         def _record_attempt(ok: bool, exc, _seg=batch[0].segment_id):
-            if not ok:
+            if metered and not ok:
                 ledger.record(p.model, 0, 0, _seg, "error")
 
         try:
@@ -126,10 +131,33 @@ def s4_understand(
                 seg.understanding = None
             continue
 
-        ledger.record(
-            p.model, batch_result.input_tokens, batch_result.output_tokens,
-            batch[0].segment_id, "ok",
-        )
+        if metered:
+            ledger.record(
+                p.model, batch_result.input_tokens, batch_result.output_tokens,
+                batch[0].segment_id, "ok",
+            )
+
+        missing = [s for s in batch if s.segment_id not in batch_result.per_segment]
+        if missing and len(batch) > 1:
+            # **批次沒回齊就逐段補跑**，不要直接標 null。
+            # 實測本地模型在 batch=3 時偶爾只回 2 段——那不是內容問題，
+            # 是它沒把陣列生完。逐段重問一次通常就有了。
+            log.info("批次少回 %d 段，逐段補跑：%s",
+                     len(missing), [s.segment_id for s in missing])
+            for seg in missing:
+                try:
+                    single = with_retries(
+                        lambda one=seg: call_model([one], image_paths, prev_summary, p,
+                                                   slide_context),
+                        p.max_retries, p.retry_backoff_sec, on_attempt=_record_attempt,
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("%s 逐段補跑仍失敗：%s", seg.segment_id, str(exc)[:120])
+                    continue
+                if metered:
+                    ledger.record(p.model, single.input_tokens, single.output_tokens,
+                                  seg.segment_id, "ok")
+                batch_result.per_segment.update(single.per_segment)
 
         for seg in batch:
             raw = batch_result.per_segment.get(seg.segment_id)
@@ -147,9 +175,9 @@ def s4_understand(
 
     confirmed = sum(1 for u in results if u.is_slide)
     corrected = sum(len(u.corrections) for u in results)
-    log.info("S4 %s：%d/%d 個 segment 完成（%d 個判定為投影片，%d 筆術語校正）。%s",
+    log.info("S4c %s：%d/%d 個 segment 完成（%d 個判定為投影片，%d 筆術語校正）。%s",
              work.video_id, len(results), len(segments), confirmed, corrected,
-             ledger.summary(p.model))
+             ledger.summary(p.model) if metered else f"本地模型 {p.model}，不佔額度")
     return results
 
 
@@ -236,9 +264,9 @@ SYNTHESIS_PROMPT = """你會拿到一支講經影片逐段的理解結果（摘�
 
 
 def s5_synthesize(cfg: Config, work: WorkPaths, ir: VideoIR) -> VideoIR:
-    """S5 全片統整。SDD §4.8。只讀 S4 輸出，**不再讀圖**。成本 1–2 次呼叫。"""
+    """S5 全片統整。SDD §4.8。只讀 S4c 輸出，**不再讀圖**。成本 1–2 次呼叫。"""
     from ..quota import QuotaExhausted, QuotaLedger
-    from .understand import _client
+    from .providers import Part, costs_quota, generate
 
     have = [s for s in ir.segments if s.understanding is not None]
     if not have:
@@ -252,53 +280,45 @@ def s5_synthesize(cfg: Config, work: WorkPaths, ir: VideoIR) -> VideoIR:
             seen[term] = seen.get(term, 0) + 1
     ir.term_index = [t for t, _ in sorted(seen.items(), key=lambda kv: (-kv[1], kv[0]))]
 
+    metered = costs_quota(cfg.s5.model)
     ledger = QuotaLedger(OutPaths(cfg.out_dir).quota_db, cfg.quota)
-    try:
-        ledger.check(planned_requests=1, model=cfg.s5.model)
-    except QuotaExhausted as exc:
-        log.warning("S5 %s：%s；TL;DR 與章節留待下次", work.video_id, exc)
-        return ir
+    if metered:
+        try:
+            ledger.check(planned_requests=1, model=cfg.s5.model)
+        except QuotaExhausted as exc:
+            log.warning("S5 %s：%s；TL;DR 與章節留待下次", work.video_id, exc)
+            return ir
 
     body = "\n\n".join(
         f"## {s.segment_id}（{s.t_start:.0f}s – {s.t_end:.0f}s）\n{s.understanding.summary}"
         for s in have
     )
 
-    from google.genai import types
-
     try:
-        response = _client().models.generate_content(
-            model=cfg.s5.model,
-            contents=[f"影片標題：{ir.meta.title}\n\n{body}"],
-            config=types.GenerateContentConfig(
-                system_instruction=SYNTHESIS_PROMPT,
-                response_mime_type="application/json",
-                response_schema=SYNTHESIS_SCHEMA,
-                temperature=0.2,
-            ),
+        result = generate(
+            cfg.s5.model, SYNTHESIS_PROMPT,
+            [Part(text=f"影片標題：{ir.meta.title}\n\n{body}")],
+            SYNTHESIS_SCHEMA,
         )
     except Exception as exc:  # noqa: BLE001
-        # 統整失敗不該讓已花額度的 S4 結果作廢——TL;DR 是加分項，
-        # 逐段理解才是產品的主體。
-        log.error("S5 %s 失敗，保留逐段結果並繼續：%s", work.video_id, exc)
-        ledger.record(cfg.s5.model, 0, 0, None, "error")
+        # S5 失敗不該拖垮整支——逐段結果已經在磁碟上了
+        if metered:
+            ledger.record(cfg.s5.model, 0, 0, None, "error")
+        log.error("S5 %s 失敗，保留逐段結果並繼續：%s", work.video_id, str(exc)[:200])
         return ir
 
-    import json as _json
+    if metered:
+        ledger.record(cfg.s5.model, result.input_tokens, result.output_tokens, None, "ok")
 
-    payload = _json.loads(response.text)
-    usage = getattr(response, "usage_metadata", None)
-    ledger.record(
-        cfg.s5.model,
-        getattr(usage, "prompt_token_count", 0) or 0,
-        getattr(usage, "candidates_token_count", 0) or 0,
-        None, "ok",
-    )
-
-    ir.tldr = (payload.get("tldr") or "").strip() or None
-    ir.chapters = [c for c in payload.get("chapters", []) if c.get("title")]
-    log.info("S5 %s：TL;DR + %d 章節 + %d 個術語",
-             work.video_id, len(ir.chapters), len(ir.term_index))
+    payload = result.payload
+    ir.tldr = (payload.get("tldr") or "").strip()
+    ir.chapters = [
+        {"title": (c.get("title") or "").strip(), "t_start": float(c.get("t_start") or 0.0)}
+        for c in payload.get("chapters", [])
+        if (c.get("title") or "").strip()
+    ]
+    log.info("S5 %s：TL;DR %d 字、章節 %d 個、術語 %d 個",
+             work.video_id, len(ir.tldr), len(ir.chapters), len(ir.term_index))
     return ir
 
 

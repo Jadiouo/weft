@@ -122,6 +122,16 @@ class VideoState(BaseModel):
         rec.error = None
         rec.note = note
 
+    def mark_stale(self, stage: Stage) -> None:
+        """把階段標回未完成，並作廢其下游。
+
+        用於「state 說完成、但產物實際上不在」的情形——例如快取檔被手動
+        刪掉。**不能默默往下走**：那會讓下游拿到空的衍生狀態，
+        產出一份少了內容的知識庫，而每一項機械檢查都是綠的（D22 的教訓）。
+        """
+        self.stages[stage] = StageRecord()
+        self.invalidate_downstream(stage)
+
     def mark_failed(self, stage: Stage, error: str) -> None:
         rec = self.record(stage)
         rec.status = StageStatus.FAILED

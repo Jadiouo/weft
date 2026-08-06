@@ -43,3 +43,44 @@ def test_unknown_provider_is_rejected():
 
     with pytest.raises(UnknownProvider):
         generate("openai:gpt-4", "sys", [Part(text="hi")], {})
+
+
+# ---------------------------------------------------------------------------
+# 本地模型不得佔用雲端額度
+#
+# 實測抓到的真實 bug：全本地配置跑到一半，被自己的額度帳本判定
+# 「額度用盡」而停下——`s4_understand` 無條件記帳。
+# ---------------------------------------------------------------------------
+
+def test_local_stages_do_not_consume_quota(tmp_path, monkeypatch):
+    from weft.config import Config
+    from weft.paths import OutPaths, WorkPaths
+    from weft.quota import QuotaLedger
+    from weft.stages import cloud
+    from weft.stages.understand import BatchResult
+    from tests.factories import make_ir
+
+    cfg = Config()
+    cfg.out_dir = tmp_path / "out"
+    cfg.s4.model = "ollama:qwen2.5:14b"
+    cfg.s4.batch_segments = 1
+    (tmp_path / "out").mkdir(parents=True, exist_ok=True)
+
+    work = WorkPaths(tmp_path / "work", "vid")
+    work.dir.mkdir(parents=True, exist_ok=True)
+    ir = make_ir(work.dir)
+
+    monkeypatch.setattr(cloud, "_load_cached", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "weft.stages.understand.call_model",
+        lambda *a, **k: BatchResult(
+            per_segment={s.segment_id: {"segment_id": s.segment_id, "corrections": [],
+                                        "summary": "x", "content_blocks": [], "terms": []}
+                         for s in ir.segments},
+            input_tokens=100, output_tokens=50, model_used="ollama:qwen2.5:14b"),
+    )
+
+    cloud.s4_understand(cfg, work, ir.segments, ir.slides, None)
+
+    ledger = QuotaLedger(OutPaths(cfg.out_dir).quota_db, cfg.quota)
+    assert ledger.usage_today("ollama:qwen2.5:14b").requests == 0, "本地模型不得記進額度帳本"

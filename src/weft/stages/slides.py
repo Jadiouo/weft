@@ -75,11 +75,60 @@ RESPONSE_SCHEMA = {
 
 USER_PROMPT = "這是不是投影片？若是，逐字轉錄並描述版面。"
 
+#: 只做分類的 prompt 與 schema（§2.3 的 S4a-1）。
+#: 分開的理由：**分類錯的代價比轉錄錯高**——把講者鏡頭判成投影片，
+#: 攝影棚佈景的書法就成了 §5.4 的「合法來源」。實跑單模型時 7 個誤報，
+#: 溯源未通過比例 24.3%。
+CLASSIFY_SYSTEM = """你在判斷一張從講經影片抽出的靜止畫面**是不是投影片**。
+
+**是投影片**：畫面主體為文字、圖表、經文、流程圖等準備好的教材內容。
+**不是投影片**：講者的攝影棚鏡頭、片頭片尾動畫、純裝飾畫面、會場全景。
+
+注意：講者所在的攝影棚背景**經常有大量裝飾文字**（標語、書法、招牌）。
+那些是**佈景**，不是投影片內容。判斷依據是「這是為了講解而製作的教材」，
+不是「畫面上有沒有字」。
+
+畫面中若看得到講者本人，幾乎都不是投影片。
+
+只輸出 JSON。"""
+
+CLASSIFY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reason": {"type": "string"},
+        "is_slide": {"type": "boolean"},
+    },
+    "required": ["reason", "is_slide"],
+}
+
+#: 欄位順序：**先講理由再判定**。實測（R16 §3）先描述再分類把準確率從
+#: 76.2% 拉到 81.0%——模型先用文字看過一遍，判斷時那些話已經在上下文裡。
+#: 那次量測 n=21 不足以下結論，但**分類是短輸出**，這裡的代價只有幾個 token，
+#: 而分類錯的代價很高，所以採用。
+
+
+def classify_slide(spec: str, image: bytes) -> dict:
+    """只判斷是不是投影片。輸出短，不會撞到 context 上限。"""
+    result = generate(spec, CLASSIFY_SYSTEM,
+                      [Part(text="這是不是投影片？"), Part(image=image)],
+                      CLASSIFY_SCHEMA, temperature=CLASSIFY_TEMPERATURE)
+    return {"is_slide": bool(result.payload.get("is_slide")),
+            "reject_reason": (result.payload.get("reason") or "").strip(),
+            "classifier_used": result.model_used}
+
+
+#: 逐字轉錄用 **temperature 0**。這不是創作——同一張圖應該永遠讀出同一份
+#: 文字。而且去重之後每張投影片**只轉錄一次**，那一次就決定了它所有出現
+#: 時段的 §5.4 溯源基準；取樣造成的變異在這裡沒有任何好處。
+#: （R14 量到 qwen2.5vl 對同一張圖重複轉錄的變異是 18.0%。）
+TRANSCRIBE_TEMPERATURE = 0.0
+CLASSIFY_TEMPERATURE = 0.0
+
 
 def understand_slide(spec: str, image: bytes) -> dict:
     """單張投影片。回傳 `{is_slide, reject_reason, slide_text, description, model_used}`。"""
     result = generate(spec, SYSTEM_PROMPT, [Part(text=USER_PROMPT), Part(image=image)],
-                      RESPONSE_SCHEMA)
+                      RESPONSE_SCHEMA, temperature=TRANSCRIBE_TEMPERATURE)
     payload = dict(result.payload)
     payload["model_used"] = result.model_used
     payload["_tokens"] = (result.input_tokens, result.output_tokens)
@@ -119,12 +168,16 @@ def apply_to_slide(slide: Slide, payload: dict) -> None:
 def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
     """對所有**代表幀**跑投影片理解。就地更新 `slides`。
 
+    **分兩趟：先全部分類，再全部轉錄。** 不是為了好看——
+    16 GB 放不下兩個 VLM，逐張交錯會讓 ollama 在每張圖之間換載模型。
+    實測 22 張交錯跑約 6 分鐘（16s/張），而 qwen2.5vl 單獨跑是 1.7s/張；
+    換載不只慢，還在記憶體壓力下產生過一次**不完整的轉錄**——
+    而去重之後那一次擲骰決定了該張投影片**所有出現時段**的溯源基準。
+
     `on_call(spec, in_tokens, out_tokens, slide_id, status)` 供額度記帳。
-    失敗行為（§4.7a）：重試由呼叫端負責；仍失敗則該張留空並記錄，
-    **不得以部分輸出充數**。
+    失敗行為（§4.7a）：仍失敗則該張留空並記錄，**不得以部分輸出充數**。
     """
     from .dedup import representatives
-    from .understand import with_retries
 
     p = cfg.s4a
     work.slide_understanding_dir.mkdir(parents=True, exist_ok=True)
@@ -132,6 +185,7 @@ def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
     stats = {"representatives": len(reps), "done": 0, "failed": 0,
              "is_slide": 0, "cached": 0}
 
+    todo: list[Slide] = []
     for slide in reps:
         cached = _load_cached(work, slide.slide_id, p.model, p.prompt_version)
         if cached is not None:
@@ -139,32 +193,62 @@ def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
             stats["cached"] += 1
             stats["done"] += 1
             stats["is_slide"] += bool(cached.get("is_slide"))
-            continue
+        else:
+            todo.append(slide)
 
+    # ---- 第 1 趟：分類（只在分類另用模型時）--------------------------
+    verdicts: dict[str, dict] = {}
+    if p.classifier_model and p.classifier_model != p.model:
+        for slide in list(todo):
+            image = (work.dir / slide.image_path).read_bytes()
+            try:
+                verdict = _retry(lambda img=image: classify_slide(p.classifier_model, img),
+                                 p, on_call, slide.slide_id)
+            except Exception as exc:  # noqa: BLE001
+                log.error("S4a %s：%s 分類失敗，留空並繼續——%s",
+                          work.video_id, slide.slide_id, str(exc)[:160])
+                stats["failed"] += 1
+                todo.remove(slide)
+                continue
+            if on_call:
+                on_call(p.classifier_model, 0, 0, slide.slide_id, "ok")
+            verdicts[slide.slide_id] = verdict
+            if not verdict["is_slide"]:
+                # 非投影片**不必轉錄**——省一次呼叫，也不會產生假的溯源來源
+                payload = {**verdict, "slide_text": "", "description": "",
+                           "model_used": p.model, "prompt_version": p.prompt_version}
+                _write_cache(work, slide.slide_id, payload)
+                apply_to_slide(slide, payload)
+                stats["done"] += 1
+                todo.remove(slide)
+                log.info("S4a %s：%s 判定不是投影片（%s）", work.video_id,
+                         slide.slide_id, verdict["reject_reason"] or "未說明")
+        log.info("S4a %s：第 1 趟分類完成，%d 張進入轉錄", work.video_id, len(todo))
+
+    # ---- 第 2 趟：轉錄 ----------------------------------------------
+    for slide in todo:
         image = (work.dir / slide.image_path).read_bytes()
-
-        def _attempt(ok: bool, exc, _sid=slide.slide_id):
-            if on_call and not ok:
-                on_call(p.model, 0, 0, _sid, "error")
-
         try:
-            payload = with_retries(
-                lambda img=image: understand_slide(p.model, img),
-                p.max_retries, p.retry_backoff_sec, on_attempt=_attempt,
-            )
+            payload = _retry(lambda img=image: understand_slide(p.model, img),
+                             p, on_call, slide.slide_id)
         except Exception as exc:  # noqa: BLE001
-            log.error("S4a %s：%s 失敗，留空並繼續——%s",
+            log.error("S4a %s：%s 轉錄失敗，留空並繼續——%s",
                       work.video_id, slide.slide_id, str(exc)[:160])
             stats["failed"] += 1
             continue
+
+        if slide.slide_id in verdicts:
+            # 分類已由第 1 趟定案，**不讓轉錄模型推翻**——分工的意義就在
+            # 各做各擅長的，讓不擅長分類的那個有否決權等於白拆。
+            payload["is_slide"] = True
+            payload["reject_reason"] = ""
 
         if on_call:
             in_tok, out_tok = payload.pop("_tokens", (0, 0))
             on_call(p.model, in_tok, out_tok, slide.slide_id, "ok")
         payload.pop("_tokens", None)
         payload["prompt_version"] = p.prompt_version
-        _cache_path(work, slide.slide_id).write_text(
-            json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+        _write_cache(work, slide.slide_id, payload)
 
         apply_to_slide(slide, payload)
         stats["done"] += 1
@@ -174,6 +258,30 @@ def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
                      payload.get("reject_reason") or "未說明")
 
     # 被合併的候選幀沿用代表幀的結果——同一張投影片本來就該有同一份文字
+    _propagate(slides)
+
+    log.info("S4a %s：%d 張代表幀（快取 %d、失敗 %d），其中 %d 張判定為投影片",
+             work.video_id, stats["representatives"], stats["cached"],
+             stats["failed"], stats["is_slide"])
+    return stats
+
+
+def _retry(fn, p, on_call, slide_id):
+    from .understand import with_retries
+
+    def _attempt(ok: bool, exc, _sid=slide_id):
+        if on_call and not ok:
+            on_call(p.model, 0, 0, _sid, "error")
+
+    return with_retries(fn, p.max_retries, p.retry_backoff_sec, on_attempt=_attempt)
+
+
+def _write_cache(work, slide_id: str, payload: dict) -> None:
+    _cache_path(work, slide_id).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def _propagate(slides: list[Slide]) -> None:
     by_id = {s.slide_id: s for s in slides}
     for slide in slides:
         if slide.duplicate_of and slide.duplicate_of in by_id:
@@ -181,11 +289,6 @@ def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
             slide.slide_text = rep.slide_text
             slide.layout_description = rep.layout_description
             slide.reject_reason = rep.reject_reason
-
-    log.info("S4a %s：%d 張代表幀（快取 %d、失敗 %d），其中 %d 張判定為投影片",
-             work.video_id, stats["representatives"], stats["cached"],
-             stats["failed"], stats["is_slide"])
-    return stats
 
 
 def rehydrate(cfg, work, slides: list[Slide]) -> int:
@@ -205,11 +308,5 @@ def rehydrate(cfg, work, slides: list[Slide]) -> int:
         apply_to_slide(slide, cached)
         applied += 1
 
-    by_id = {s.slide_id: s for s in slides}
-    for slide in slides:
-        if slide.duplicate_of and slide.duplicate_of in by_id:
-            rep = by_id[slide.duplicate_of]
-            slide.slide_text = rep.slide_text
-            slide.layout_description = rep.layout_description
-            slide.reject_reason = rep.reject_reason
+    _propagate(slides)
     return applied

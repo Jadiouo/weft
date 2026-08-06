@@ -130,3 +130,20 @@ def test_rehydrate_rebuilds_from_cache(work):
     assert rehydrate(cfg, work, slides) == 1
     assert slides[0].slide_text == "太上老君內觀經"
     assert slides[1].slide_text == "太上老君內觀經", "被合併的也要跟著重建"
+
+
+def test_missing_cache_is_detected_not_silently_empty(tmp_path, monkeypatch):
+    """state 說 S4a 完成、但快取檔不在時，**不能默默產出空的投影片文字**。
+
+    實跑踩到過：手動刪掉 04_slide_understanding 後，rehydrate 靜靜回傳空的，
+    管線照常跑完並產出一份少了一半內容的知識庫，每一項機械檢查都是綠的。
+    """
+    from weft.config import Config
+    from weft.paths import WorkPaths
+
+    work = WorkPaths(tmp_path, "vid")
+    work.slide_understanding_dir.mkdir(parents=True, exist_ok=True)
+    slides = [_slide("slide_001"), _slide("slide_002")]
+
+    assert rehydrate(Config(), work, slides) == 0, "沒有快取就該回報 0，讓呼叫端察覺"
+    assert all(s.slide_text is None for s in slides)

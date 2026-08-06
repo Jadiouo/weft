@@ -1,0 +1,25 @@
+# 全本地配置：S4a 與 S4c 都不花額度。
+# 模型選擇依 R21 的實測（experiments/r21_bakeoff/REPORT.md）。
+work_dir: work
+out_dir: out
+log_level: INFO
+
+s4a:
+  # 分工（§2.3 的 S4a-1 / S4a-2）。R21 實測與本機端到端都指向這個組合：
+  #   分類 gemma4:12b     is_slide 90.5%、零漏抓；輸出短，不會撞 context 上限
+  #   轉錄 gemma3:12b     依區段加權的純轉錄 CER 12.9%（R22）
+  #
+  # R21 原本推薦 qwen2.5vl（未加權 CER 4.9%），R22 修正了三個量測缺陷後
+  # 它其實是 17.7%——見 experiments/r21_bakeoff/REPORT_temp0.md。
+  classifier_model: ollama:gemma4:12b
+  model: ollama:gemma3:12b
+  prompt_version: v1
+
+s4:
+  # 逐段理解是純文字工作，用機器上既有的中文強模型。
+  model: ollama:qwen2.5:14b
+  send_images: false
+  prompt_version: v4
+
+s5:
+  model: ollama:qwen2.5:14b

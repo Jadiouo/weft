@@ -298,10 +298,26 @@ def understand_one(video_id: str, cfg: Config) -> bool:
     transcript = Transcript.model_validate_json(work.transcript.read_text(encoding="utf-8"))
 
     # ---- S4a 投影片理解（逐張相異投影片，§4.7a）----
-    if not satisfied(Stage.S4A_SLIDES):
+    from .stages import slides as slides_stage
+    from .stages.dedup import representatives
+    from .stages.providers import costs_quota
+
+    need_s4a = not state.is_satisfied(Stage.S4A_SLIDES, stage_params(cfg, Stage.S4A_SLIDES))
+    if not need_s4a:
+        # 續跑：從快取重建投影片文字（D22——衍生狀態不能只在新算的那條路上做）
+        recovered = slides_stage.rehydrate(cfg, work, slides)
+        expected = len(representatives(slides))
+        if recovered < expected:
+            # **重建不出來就不能假裝沒事。** state 說 S4a 完成，但快取檔不見了
+            # （手動刪掉、磁碟壞了）——這時若默默往下走，所有投影片都會變成
+            # 「沒有文字」，管線照樣產出一份少了一半內容的知識庫，
+            # 而每一項機械檢查都是綠的。
+            log.warning("S4a 的快取只重建出 %d/%d 張，就地重跑 S4a", recovered, expected)
+            state.mark_stale(Stage.S4A_SLIDES)
+            need_s4a = True
+
+    if need_s4a:
         from .quota import QuotaExhausted, QuotaLedger
-        from .stages import slides as slides_stage
-        from .stages.providers import costs_quota
 
         ledger = QuotaLedger(out.quota_db, cfg.quota)
 
@@ -321,11 +337,6 @@ def understand_one(video_id: str, cfg: Config) -> bool:
         slides_stage.s4a_understand_slides(cfg, work, slides, on_call=_record)
         state.mark_done(Stage.S4A_SLIDES, stage_params(cfg, Stage.S4A_SLIDES))
         state.save(work.state)
-    else:
-        # 續跑：從快取重建投影片文字（D22——衍生狀態不能只在新算的那條路上做）
-        from .stages import slides as slides_stage
-
-        slides_stage.rehydrate(cfg, work, slides)
 
     # ---- S4c 逐段理解 ----
     cloud.s4_understand(cfg, work, segments, slides, transcript)
@@ -388,8 +399,16 @@ def run_understand(cfg: Config, video_id: str | None = None, max_requests: int |
             if understand_one(vid, cfg):
                 completed += 1
             else:
-                # 額度用盡——後面的影片同樣跑不動，不必逐支重試
-                log.info("額度用盡，停止本日處理。下次重置：%s", ledger.next_reset().isoformat())
+                # 未跑完。若是額度造成的，後面的影片同樣跑不動，不必逐支重試；
+                # 全本地配置也可能未跑完（例如某幾段模型沒回），那與額度無關，
+                # **不要誤報成額度用盡**——訊息錯了會讓人往錯的方向查。
+                if ledger.remaining() <= 0:
+                    log.info("額度用盡，停止本日處理。下次重置：%s",
+                             ledger.next_reset().isoformat())
+                else:
+                    log.warning("%s 未完整跑完（與額度無關，剩餘 %d 次）。"
+                                "進度已保存，可直接續跑", vid, ledger.remaining())
+                    continue
                 break
         except ApiKeyMissing as exc:
             log.error("%s", exc)
