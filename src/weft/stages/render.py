@@ -142,11 +142,27 @@ def write_debug_markdown(ir, work, path: Path) -> Path:
 
     §5.6 的檢查項目：投影片圖是否為該頁最完整版本、逐字稿術語是否正確、
     content_block 分類是否合理、chunk 是否自足。版面依此排列。
+
+    **圖片連結必須從這份 markdown 的位置算相對路徑**（D23）。
+    `slide.image_path` 是相對 `work/<video_id>/` 的，而這份文件寫到
+    `out/debug/`——直接用會指向不存在的 `out/debug/03_slides/...`，
+    整份文件一張圖都顯示不出來。而 §5.6 的人工複核**就是靠看圖**：
+    D20 那個 30.6% 的圖片錯位，唯一的發現途徑就是逐張比對畫面與判定。
     """
+    import os
+
     from ..ir import VerificationStatus
 
     def hhmmss(t: float) -> str:
         return f"{int(t) // 3600:02d}:{int(t) % 3600 // 60:02d}:{int(t) % 60:02d}"
+
+    #: `work` 可能是 `WorkPaths` 也可能直接是目錄（測試就這樣傳）
+    work_dir = Path(getattr(work, "dir", work))
+
+    def image_link(image_path: str) -> str:
+        """從 markdown 所在目錄指到 work 目錄下的實際圖檔。"""
+        target = (work_dir / image_path).resolve()
+        return os.path.relpath(target, path.parent.resolve()).replace(os.sep, "/")
 
     lines = [
         f"# {ir.meta.title}",
@@ -179,8 +195,7 @@ def write_debug_markdown(ir, work, path: Path) -> Path:
         shown_ref = seg.slide_ref or seg.candidate_ref
         slide = ir.slide_by_id(shown_ref) if shown_ref else None
         if slide:
-            rel = Path(slide.image_path)
-            lines.append(f"![{slide.slide_id}]({rel.as_posix()})")
+            lines.append(f"![{slide.slide_id}]({image_link(slide.image_path)})")
             if rejected:
                 lines.append("")
                 lines.append(

@@ -335,3 +335,30 @@ def test_blocks_with_a_real_transcript_are_kept():
         }],
     }
     assert len(to_understanding(raw, segment, S4Config()).content_blocks) == 1
+
+
+def test_debug_markdown_image_links_resolve_from_the_markdown_location(tmp_path):
+    """D23：圖片連結要從 markdown 所在目錄算，不是從 work 目錄。
+
+    §5.6 的人工複核靠看圖——D20 那個 30.6% 的圖片錯位就是這樣抓到的。
+    連結壞掉等於這道把關失效，而且不會有任何測試變紅。
+    """
+    from weft.stages.render import write_debug_markdown
+    from tests.factories import make_ir
+
+    work_dir = tmp_path / "work" / "vid"
+    ir = make_ir(work_dir)
+    slide = ir.slides[0]
+    img = work_dir / slide.image_path
+    img.parent.mkdir(parents=True, exist_ok=True)
+    img.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+    md_path = tmp_path / "out" / "debug" / "vid.md"
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+    write_debug_markdown(ir, work_dir, md_path)
+
+    import re
+    links = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", md_path.read_text(encoding="utf-8"))
+    assert links, "markdown 裡沒有任何圖片連結"
+    for link in links:
+        assert (md_path.parent / link).exists(), f"連結指不到實際檔案：{link}"
