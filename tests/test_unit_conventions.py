@@ -104,9 +104,13 @@ def test_no_smoke_test_assertions_in_metric_tests():
         source = path.read_text(encoding="utf-8")
         if "thresholds" not in source:
             continue
-        for match in _WEAK_ASSERT.finditer(_strip_literals_and_comments(source)):
-            line = source[: match.start()].count("\n") + 1
-            offenders.append(f"{path.name}:{line}")
+        # **逐行掃描，不做位移換算。** 原本是拿去除後字串的位移去索引原檔，
+        # 但去除字串與註解會改變長度，回報的行號因此一直是錯的——
+        # 錯誤訊息指到不相干的那一行，反而讓人往錯的地方查。
+        # 逐行比對沒有位移，也就沒有對錯的問題。
+        for i, line in enumerate(_strip_literals_and_comments(source).splitlines(), 1):
+            if _WEAK_ASSERT.search(line):
+                offenders.append(f"{path.name}:{i}")
     assert not offenders, f"量化門檻測試中出現「跑過就好」的斷言：{offenders}"
 
 

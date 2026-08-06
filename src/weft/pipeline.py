@@ -15,6 +15,7 @@ from .config import Config
 from .ir import CandidateSet, Slide, Transcript, VideoMeta
 from .paths import OutPaths, WorkPaths
 from .stages import dedup
+from .stages.survey import BACKGROUND_DRIFT
 from .state import Stage, StageStatus, VideoState
 
 log = logging.getLogger(__name__)
@@ -109,6 +110,33 @@ def prepare_one(
             work.meta.write_text(meta.model_dump_json(indent=2), encoding="utf-8")
         state.mark_done(Stage.S0_FETCH, stage_params(cfg, Stage.S0_FETCH))
         state.save(work.state)
+
+    # ---- S-1 素材勘查（v0.4：**逐支跑**，§4.0）----
+    # 與 S1b 共用抽幀，邊際成本接近零。實測同一個播放清單的第 14、27 集
+    # 換了攝影棚背景，「一個系列跑一次」的假設不成立。
+    if cfg.survey_each_video:
+        from .stages.survey import (
+            load_video_profiles,
+            nearest_background,
+            profile_video,
+            write_video_profile,
+        )
+
+        prof_path = cfg.out_dir / "profile" / f"{work.video_id}.json"
+        if not prof_path.exists():
+            profile = profile_video(work.video_id, work, cfg)
+            nearest = nearest_background(profile, load_video_profiles(cfg.out_dir))
+            if nearest and nearest[1] >= BACKGROUND_DRIFT:
+                # **不中止**——換背景是素材事實不是錯誤。但要留下記錄，
+                # 因為 §4.3 的分界值必須以本支自己的中位幀重算。
+                log.warning("S-1 %s：攝影棚背景與已知的每一支都不同"
+                            "（最近的是 %s，差 %.3f，門檻 %.2f）——"
+                            "分界值以本支自己的中位幀重算",
+                            work.video_id, nearest[0], nearest[1], BACKGROUND_DRIFT)
+            write_video_profile(profile, cfg.out_dir)
+            log.info("S-1 %s：全螢幕 %.1f%%、分離度 %.2fx、%d 個區段",
+                     work.video_id, profile.fullscreen_ratio * 100,
+                     profile.mode_separation, profile.section_count)
 
     # ---- S1b 靜止區段 ----
     if satisfied(Stage.S1B_SLIDES) and work.candidates.exists():

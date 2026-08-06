@@ -278,6 +278,11 @@ class ProvenanceConfig(StageConfig):
 class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    #: **逐支跑 S-1**（v0.4，§4.0）。原本是「每系列抽樣一次」，
+    #: 實測同一個播放清單的第 14、27 集換了攝影棚背景，抽樣得到的 profile
+    #: 推廣不到同系列其他集。與 S1b 共用抽幀，邊際成本接近零。
+    survey_each_video: bool = True
+
     work_dir: Path = Path("work")
     out_dir: Path = Path("out")
     log_level: str = "INFO"

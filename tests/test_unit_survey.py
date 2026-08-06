@@ -141,3 +141,78 @@ def test_thresholds_are_material_fit_not_acceptance_thresholds():
     for name in ("MIN_MODE_SEPARATION", "MAX_SECTIONS_PER_MINUTE",
                  "SPEAKER_RATIO_REFERENCE", "MAX_MIDBAND_RATIO"):
         assert name not in ACCEPTANCE_THRESHOLDS
+
+
+# ---------------------------------------------------------------------------
+# v0.4：逐支跑 S-1，跨集比對攝影棚背景（SDD §4.0 第 5 條判準）
+#
+# 實測同一個播放清單的四集（水墨山景 ×2、木質牆 ×2）：
+#   群內最大 0.029、跨群最小 0.096，分離 3.3x。門檻取 0.06。
+# ---------------------------------------------------------------------------
+
+def _profile(vid: str, fingerprint: list[float]):
+    from weft.stages.survey import VideoProfile
+
+    return VideoProfile(
+        video_id=vid, duration=100.0, frame_count=100, fullscreen_ratio=0.2,
+        mode_separation=5.0, otsu_cut=0.1, section_count=10,
+        sections_per_minute=1.0, dwell_median=30.0, dwell_min=5.0, dwell_max=90.0,
+        transition_frames=1, transition_ratio=0.01, camera_motion_frames=0,
+        has_manual_caption=True, has_auto_caption=False,
+        background_fingerprint=fingerprint,
+    )
+
+
+def test_same_backdrop_is_not_flagged():
+    from weft.stages.survey import BACKGROUND_DRIFT, background_notes
+
+    a = _profile("ep01", [0.5] * 64)
+    b = _profile("ep05", [0.52] * 64)   # 差 0.02，群內
+    assert background_notes([a, b]) == []
+
+
+def test_new_backdrop_is_flagged_once():
+    """換背景要報，但**同一個新背景不該每支都報**。
+
+    實測第 14、27 集是同一面木質牆——第 14 集報一次就夠，
+    第 27 集若再報一次，警告就變成雜訊。
+    """
+    from weft.stages.survey import background_notes
+
+    ink1 = _profile("ep01", [0.5] * 64)
+    ink2 = _profile("ep05", [0.52] * 64)
+    wood1 = _profile("ep14", [0.7] * 64)   # 與水墨差 0.2
+    wood2 = _profile("ep27", [0.72] * 64)  # 與 ep14 差 0.02
+
+    notes = background_notes([ink1, ink2, wood1, wood2])
+    assert len(notes) == 1
+    assert "ep14" in notes[0]
+
+
+def test_nearest_is_over_all_known_not_just_the_previous():
+    """比對對象是**所有已知**，不是「前一支」。
+
+    「前一支」在檔案系統上取決於檔名排序而非集數順序；
+    而且系列可能在兩種背景之間來回切換。
+    """
+    from weft.stages.survey import BACKGROUND_DRIFT, nearest_background
+
+    ink = _profile("ep01", [0.5] * 64)
+    wood = _profile("ep14", [0.7] * 64)
+    back_to_ink = _profile("ep20", [0.51] * 64)
+
+    # 依序列位置，ep20 的「前一支」是 ep14（差 0.19），但它其實與 ep01 同背景
+    video_id, distance = nearest_background(back_to_ink, [ink, wood])
+    assert video_id == "ep01"
+    assert distance < BACKGROUND_DRIFT
+
+
+def test_missing_fingerprint_is_not_a_false_alarm():
+    """舊的 profile 沒有指紋欄位——不該因此判定「換了背景」。"""
+    from weft.stages.survey import background_notes, nearest_background
+
+    old = _profile("ep01", [])
+    new = _profile("ep02", [0.5] * 64)
+    # 沒有指紋可比 → 不產生任何比對結果，更不能因此判定「換了背景」
+    assert nearest_background(new, [old]) == None  # noqa: E711
+    assert background_notes([old, new]) == []

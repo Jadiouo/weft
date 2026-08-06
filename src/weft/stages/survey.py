@@ -48,6 +48,13 @@ class VideoProfile:
     camera_motion_frames: int
     has_manual_caption: bool
     has_auto_caption: bool
+    #: 攝影棚常態（中位幀）的指紋。**跨集比對用**——實測同一個播放清單的
+    #: 第 14、27 集換了攝影棚背景（木質牆 vs 水墨山景），
+    #: 「一個系列跑一次 S-1」的假設因此不成立（SDD v0.4 §4.0）。
+    background_fingerprint: list[float] = field(default_factory=list)
+    #: 相異投影片數 ÷ 候選幀數。SDD §4.3b 要求納入 profile：
+    #: 這個比例在同系列各集之間若大幅跳動，代表去重門檻不能通用。
+    distinct_ratio: float | None = None
 
     def to_dict(self) -> dict:
         return {k: (round(v, 4) if isinstance(v, float) else v)
@@ -61,6 +68,8 @@ class SeriesProfile:
     series_id: str | None
     videos: list[VideoProfile] = field(default_factory=list)
     mismatches: list[str] = field(default_factory=list)
+    #: 不中止、但必須留下的觀察（例如換了攝影棚背景）。v0.4 §4.0 第 5 條。
+    notes: list[str] = field(default_factory=list)
 
     @property
     def ok(self) -> bool:
@@ -71,6 +80,7 @@ class SeriesProfile:
             "series_id": self.series_id,
             "ok": self.ok,
             "mismatches": self.mismatches,
+            "notes": self.notes,
             "videos": [v.to_dict() for v in self.videos],
         }
 
@@ -137,6 +147,9 @@ def profile_video(video_id: str, work, cfg) -> VideoProfile:
     ])
     reference = np.median(tiny, axis=0)
     distance = np.mean(np.abs(tiny - reference), axis=(1, 2))
+    #: 攝影棚常態的指紋——中位幀降到 8x8 後攤平。夠小可以進 JSON，
+    #: 也夠粗不受壓縮雜訊影響，但換了背景會明顯不同（v0.4 §4.0）。
+    fingerprint = cv2.resize(reference, (8, 8), interpolation=cv2.INTER_AREA).flatten()
     cut = _otsu(distance)
     is_fullscreen = distance > cut
 
@@ -197,7 +210,76 @@ def profile_video(video_id: str, work, cfg) -> VideoProfile:
         camera_motion_frames=camera_motion,
         has_manual_caption=meta.has_manual_caption,
         has_auto_caption=meta.has_auto_caption,
+        background_fingerprint=[round(float(x), 4) for x in fingerprint],
     )
+
+
+#: 與**所有已知**同系列 profile 的最小指紋距離超過此值，
+#: 即視為「換了攝影棚背景」。
+#:
+#: 實測同一個播放清單的四集（水墨山景 ×2、木質牆 ×2）：
+#:
+#: | | 第1集 | 第5集 | 第14集 | 第27集 |
+#: |---|---|---|---|---|
+#: | 第1集 | — | 0.017 | 0.102 | 0.103 |
+#: | 第5集 | 0.017 | — | 0.096 | 0.099 |
+#: | 第14集 | 0.102 | 0.096 | — | 0.029 |
+#:
+#: 群內最大 0.029、跨群最小 0.096，**分離 3.3x**。0.06 取在兩者之間。
+#: 餘裕不大（3.3x，勉強過 D1／R12 的 2x 判準），素材換系列時要重量。
+#:
+#: **這不是中止條件**——換背景是素材事實不是錯誤，但它代表 §4.3 的
+#: 分界值要以本支自己的中位幀重算，不能沿用別支的。
+BACKGROUND_DRIFT = 0.06
+
+
+def nearest_background(profile: VideoProfile,
+                       known: list[VideoProfile]) -> tuple[str, float] | None:
+    """與**所有**已知 profile 比，回傳最近的那一支與距離。
+
+    **不是「跟前一支比」**——「前一支」在檔案系統上取決於檔名排序，
+    不是集數順序；而且系列可能在兩種背景之間來回切換。
+    問「有沒有任何一支長得像我」才是對的問題。
+    """
+    best: tuple[str, float] | None = None
+    for other in known:
+        if other.video_id == profile.video_id:
+            continue
+        dist = background_distance(other, profile)
+        if dist is None:
+            continue
+        if best is None or dist < best[1]:
+            best = (other.video_id, dist)
+    return best
+
+
+def background_distance(a: VideoProfile, b: VideoProfile) -> float | None:
+    """兩支影片的攝影棚常態差多遠。缺指紋時回傳 `None`。"""
+    if not a.background_fingerprint or not b.background_fingerprint:
+        return None
+    if len(a.background_fingerprint) != len(b.background_fingerprint):
+        return None
+    return float(np.mean(np.abs(np.array(a.background_fingerprint)
+                                - np.array(b.background_fingerprint))))
+
+
+def background_notes(profiles: list[VideoProfile]) -> list[str]:
+    """逐支與前一支比對背景。SDD v0.4 §4.0 的第 5 條判準。
+
+    **不中止，但必須記錄**——實測第 14 集換了攝影棚背景，而前 13 集都沒換。
+    把第 1 集的 profile 套到第 14 集，與 v0.1 把單支影片套到整個系列
+    是同一個錯誤的不同尺度。
+    """
+    notes: list[str] = []
+    for i, cur in enumerate(profiles):
+        nearest = nearest_background(cur, profiles[:i])
+        if nearest and nearest[1] >= BACKGROUND_DRIFT:
+            notes.append(
+                f"{cur.video_id} 的攝影棚背景與已知的每一支都不同"
+                f"（最近的是 {nearest[0]}，差 {nearest[1]:.3f}，門檻 {BACKGROUND_DRIFT}）"
+                f"——§4.3 的分界值須以本支自己的中位幀重算"
+            )
+    return notes
 
 
 def check_mismatches(profiles: list[VideoProfile]) -> list[str]:
@@ -263,7 +345,44 @@ def survey(video_ids: list[str], cfg, series_id: str | None = None) -> SeriesPro
         series_id=series_id,
         videos=profiles,
         mismatches=check_mismatches(profiles),
+        notes=background_notes(profiles),
     )
+
+
+def write_video_profile(profile: VideoProfile, out_dir: Path) -> Path:
+    """寫出 `out/profile/{video_id}.json`。SDD v0.4 §4.0——**逐支**。
+
+    系列彙總（`{series_id}.json`）記的是「這個系列有多不齊」，
+    不是拿來當通則的。逐支的這一份才是該支自己的量測結果。
+    """
+    import json
+
+    target = out_dir / "profile"
+    target.mkdir(parents=True, exist_ok=True)
+    path = target / f"{profile.video_id}.json"
+    path.write_text(json.dumps(profile.to_dict(), ensure_ascii=False, indent=2),
+                    encoding="utf-8")
+    return path
+
+
+def load_video_profiles(out_dir: Path) -> list[VideoProfile]:
+    """讀回既有的逐支 profile，供跨集比對用。"""
+    import json
+
+    target = out_dir / "profile"
+    if not target.exists():
+        return []
+    out = []
+    for path in sorted(target.glob("*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:  # noqa: BLE001
+            continue
+        if "video_id" not in data or "series_id" in data:
+            continue  # 系列彙總檔，不是逐支的
+        known = {f for f in VideoProfile.__dataclass_fields__}
+        out.append(VideoProfile(**{k: v for k, v in data.items() if k in known}))
+    return out
 
 
 def write_profile(profile: SeriesProfile, out_dir: Path) -> Path:
