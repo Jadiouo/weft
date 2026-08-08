@@ -81,6 +81,14 @@ class GoldenAnnotation:
     #: 只當觀察值，不設門檻——那一段要抓什麼還沒定義清楚。
     body_start: float | None = None
     body_end: float | None = None
+    #: **內容邊界**（票 06）：講者換了正在談的東西的時刻。
+    #:
+    #: 與 `boundaries`（換頁）是兩件事，而且**刻意分開存**：
+    #: 換投影片不等於換話題（同一個主題可以翻三頁圖），換話題也不一定
+    #: 換投影片（講者可以對著同一張圖講完兩件事）。v0.5 起主幹是逐字稿，
+    #: 分段要對的是這一份，不是換頁那一份。
+    #: 標註規範寫在各檔的 `notes` 裡。
+    segment_boundaries: list[Boundary] = field(default_factory=list)
     #: **保留集**：這一支不得用來調 prompt 或調參數，只用來量測。
     #:
     #: 存在的理由是實測。「看得到講者 → 不是投影片」這條規則在三支
@@ -94,6 +102,12 @@ class GoldenAnnotation:
     @property
     def confirmed(self) -> list[float]:
         return sorted(b.t for b in self.boundaries if b.status == "confirmed")
+
+    @property
+    def topic_boundaries(self) -> list[float]:
+        """課程本體內、經人工確認的內容邊界。"""
+        return sorted(b.t for b in self.segment_boundaries
+                      if b.status == "confirmed" and self.in_body(b.t))
 
     @property
     def body_confirmed(self) -> list[float]:
@@ -121,6 +135,9 @@ class GoldenAnnotation:
     def load(cls, path: Path) -> GoldenAnnotation:
         raw = json.loads(path.read_text(encoding="utf-8"))
         raw["boundaries"] = [Boundary(**b) for b in raw.get("boundaries", [])]
+        raw["segment_boundaries"] = [
+            Boundary(**b) for b in raw.get("segment_boundaries", [])
+        ]
         known = {f.name for f in fields(cls)}
         unknown = set(raw) - known
         if unknown:

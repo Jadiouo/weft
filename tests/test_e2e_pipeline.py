@@ -527,3 +527,29 @@ def _count_slides_per_page(slides, truth) -> list[int]:
             continue
         counts.append(sum(1 for s in slides if placed.t_start <= s.t_first_seen < placed.t_end))
     return counts
+
+
+@pytest.mark.golden
+def test_segmentation_golden_set_is_usable(cfg: Config):
+    """分段黃金集必須存在、有保留集、且保留集是不同型態的素材（票 06）。
+
+    這一條不量演算法——票 07 才量。它守的是**黃金集本身可不可用**：
+    沒有保留集的話，票 07 在調校集上量到的任何數字都可能只是素材的
+    統計巧合（R26：v3 的 1.000 在 20/20 上成立，換一個場景整組失效）。
+    """
+    annotated = [a for a in _golden_annotations() if a.segment_boundaries]
+    if not annotated:
+        pytest.skip("尚未標註內容邊界（見 tests/golden/annotate.py 的規範）")
+
+    assert any(a.holdout for a in annotated), (
+        "分段黃金集沒有保留集。票 07 的量測會全部落在調校集上，"
+        "而調校集上的漂亮數字證明不了判準正確（R26）。"
+    )
+    assert any(not a.holdout for a in annotated), "只有保留集就沒有東西可以調"
+
+    for a in annotated:
+        assert a.has_body, f"{a.video_id} 沒標 body 範圍，內容邊界無從界定起訖"
+        assert a.topic_boundaries, f"{a.video_id} 的內容邊界全部落在 body 之外"
+        assert all(b.note for b in a.segment_boundaries), (
+            f"{a.video_id} 有邊界沒寫理由——複核時無法判斷對錯，等於沒標"
+        )
