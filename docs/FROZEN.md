@@ -146,6 +146,33 @@ DocWhisper 用的就是 prompt，只是逐句局部而非全域。
 
 ---
 
+## F10：yt-dlp 的 JS challenge solver（`--remote-components ejs:github`）
+
+**狀態**：**不啟用。** 影響已量測，代價未量測。
+
+**為什麼停**：yt-dlp 2026.07 之後，YouTube 的部分格式需要解 JS challenge。
+機器上有 node（v22）沒有 deno，已把 `s0.js_runtimes` 指定為 node，
+消掉「No supported JavaScript runtime」那個警告。但**實測格式數與解析度
+完全沒變**：
+
+| | 格式數 | 視訊 | 最高 |
+|---|---|---|---|
+| 預設（無 runtime） | 16 | 9 | 720p |
+| 指定 node | 16 | 9 | 720p |
+
+要再往上得開 `--remote-components ejs:github`——那會在**執行期從 GitHub
+下載並執行腳本**。這是供應鏈層級的取捨，不由實作者單方面決定。
+
+**未量測的代價**：已下載的三支全是 720p，而 R21／R22 的 `slide_text` CER
+（最佳 12.9%）也全是在 720p 上量的。**1080p 會不會讓 CER 下降，沒有量過**，
+甚至「這些影片有沒有 1080p」都不知道——那要先解 challenge 才看得到。
+
+**恢復觸發條件**：若 `slide_text` 的品質被確認是瓶頸（票 10 的逐段 prompt
+重測若仍無改善），先量「同一張投影片在 720p 與 1080p 下的 CER 差多少」，
+再決定要不要為此接受遠端元件。**不要為了消掉一個警告就開它。**
+
+---
+
 ## F9：懸空門檻（`DANGLING_THRESHOLDS`）
 
 **狀態**：由 `test_dangling_thresholds_are_documented` 強制與

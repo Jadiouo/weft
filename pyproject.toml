@@ -42,7 +42,11 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src", "."]
-addopts = "-ra --strict-markers"
+# **預設就是離線安全的。** `pytest tests/ -q` 不得需要網路、雲端額度或
+# 本地模型服務——擱置數週後回到這個 repo，「現在還是好的嗎」必須用一個
+# 指令在幾十秒內答得出來（SPEC v0.5 票 02）。
+# 要跑需要外部資源的那一層：`pytest -m live`（CLI 的 -m 會蓋掉這裡的）。
+addopts = "-ra --strict-markers -m 'not live and not quota and not gpu'"
 markers = [
     # SDD §5.5 #10：e2e 不得用 mock 取代真實模型呼叫；單元測試可 mock，
     # 但檔名須含 `_unit_`。這個規範由 test_unit_conventions.py 強制執行。
@@ -51,4 +55,8 @@ markers = [
     "gpu: 需要 CUDA 與 pipe-gpu 環境",
     "quota: 會消耗 Gemini API 額度",
     "golden: 需要真實影片黃金集（SDD §5.1 B）",
+    # 需要外部資源（下載影片、本地 ollama 服務）。**預設不跑。**
+    # 與 `quota` 的差別：quota 是「會花掉雲端額度」，live 是「需要網路或
+    # 模型服務」。FROZEN F1 之後雲端不啟用，但 live 這一層仍然存在。
+    "live: 需要網路下載與本地模型服務，預設不跑（見 CLAUDE.md）",
 ]

@@ -380,6 +380,7 @@ def test_term_correction_precision(cfg: Config):
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.live
 @pytest.mark.quota
 @pytest.mark.gpu
 def test_single_video_end_to_end_produces_ir(cfg: Config, tmp_path):
@@ -424,6 +425,7 @@ def test_quota_exhaustion_stops_without_silent_fallback(cfg: Config, tmp_path):
 # --------------------------------------------------------------------------
 
 
+@pytest.mark.live
 @pytest.mark.quota
 @pytest.mark.gpu
 def test_chunks_jsonl_passes_all_invariants(cfg: Config, tmp_path):

@@ -22,14 +22,53 @@
 ~/miniconda3/envs/pipe-cpu/bin/python     # 主要
 ~/miniconda3/envs/pipe-gpu/bin/python     # GPU 工作
 
-# 測試
+# 測試。**預設就是離線的**——不需要網路、雲端額度、或本地模型服務。
+# 乾淨機器上實測 484 passed / 3 skipped / 0 failed，19 秒。
 ~/miniconda3/envs/pipe-cpu/bin/python -m pytest tests/ -q
+
+# 需要外部資源的那一層（下載影片 + 本地 ollama）。**手動跑。**
+~/miniconda3/envs/pipe-cpu/bin/python -m pytest -m live -q
 ```
+
+### 兩層測試
+
+| 層 | 依賴 | 何時跑 |
+|---|---|---|
+| 預設（`pytest tests/ -q`） | 無。ffmpeg 產生的合成素材會快取 | 每次改動 |
+| `-m live` | 網路下載 + ollama 服務 | 手動，改動 S0/S4 時 |
+
+預設層排除 `live`、`quota`、`gpu` 三個 marker（設在 `pyproject.toml` 的
+`addopts`）。CLI 的 `-m` 會蓋掉它，所以 `pytest -m live` 照樣跑得到。
+
+`tests/test_e2e_offline.py` 是離線 e2e：拿快取的 IR 跑 S6 渲染、§5.4 溯源、
+§5.3 不變量、`chunks.jsonl` 契約。**它不 mock 模型**（§5.5 #10）——
+它根本不呼叫模型，測的是拿到理解結果之後那一段。
+
+需要真實影片的黃金集測試在沒有 `work/` 時**會 skip 而不是假通過**。
+
+### 目前已知的紅燈（只有一個）
+
+```
+tests/test_e2e_pipeline.py::test_slide_classification_on_real_videos
+  2FjApOVIbUs[保留集] 0.909 ／ C_CFyilE-ks[調校集] 0.947
+  cxrqHABhWOU[調校集] 1.000 ／ zIglvjoU9vo[調校集] 0.864     門檻 0.95
+```
+
+**這是刻意留著的真紅燈，不是壞掉的測試**（R26：改 prompt 的措辭已到頂，
+再調就是對黃金集過擬合）。把它藏到 marker 後面就變成 §5.2 那四項
+「只 assert 常數值」的同類——綠燈製造「有人管」的錯覺。
+
+回來時比對這四個數字：**一樣就是沒退步，變了才要查**。
+它需要 `work/` 下的快取產物；乾淨機器上這條會 skip，全套是
+**484 passed / 3 skipped / 0 failed**。
 
 > `python` 這個裸指令在這台機器上不存在。用完整路徑或先 activate。
 
-**已知環境問題**：`yt-dlp` 缺 JS runtime（需 deno），會警告
-"some formats may be missing"，字幕欄位可能抓不完整。
+**已知環境問題**：yt-dlp 的 JS challenge。機器上有 node 沒有 deno，
+`s0.js_runtimes` 已指定 node，消掉了 "No supported JavaScript runtime" 的警告；
+但**實測格式數與解析度完全沒變**（都是 16 個格式、最高 720p）。
+要再往上得開 `--remote-components ejs:github`——執行期從 GitHub 下載並
+執行腳本，**刻意不開**，見 `docs/FROZEN.md` F10。
 
 ---
 

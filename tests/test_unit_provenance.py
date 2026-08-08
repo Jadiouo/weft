@@ -510,3 +510,32 @@ def test_unverified_jsonl_replaces_same_video_on_rerun(tmp_path):
     kept = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
     assert any(r["video_id"] == "other" for r in kept)
     assert sum(1 for r in kept if r["video_id"] == "v") == len(verdict.unverified)
+
+
+def test_verbatim_match_against_corrected_still_counts_as_dependency():
+    """對校正後的逐字稿**逐字命中**，同樣算「靠校正才對得上」。
+
+    `check_block` 對這種情形回傳 `degenerate_copy`，而那是 **presence**
+    訊號——「逐字找到了」，不是另一種「找不到」。把它排除掉的話，
+    最明顯的一類依賴反而標不出來。
+
+    這一條存在是為了釘住這個判斷：它看起來很像該和 `unverified` 一起
+    排除，但兩者的語意相反。
+    """
+    ir = _ir_with_correction(_RAW, _CORRECTED, "識蘊進入")
+    (v,) = p.check_video(ir, cfg()).verdicts
+    assert v.status is VerificationStatus.UNVERIFIED
+    assert v.depends_on_correction is True
+    assert "degenerate_copy" in v.reason
+
+
+def test_failure_unrelated_to_correction_is_not_flagged():
+    """對兩個版本都對不上的，不得被標成「靠校正才對得上」。
+
+    raw 與 corrected 只差一個術語，所以與那個術語無關的內容在兩邊
+    一樣對不上——這種是真的溯不到來源，修法完全不同。
+    """
+    ir = _ir_with_correction(_RAW, _CORRECTED, "量子力學的測不準原理")
+    (v,) = p.check_video(ir, cfg()).verdicts
+    assert v.status is VerificationStatus.UNVERIFIED
+    assert v.depends_on_correction is False

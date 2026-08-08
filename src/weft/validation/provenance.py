@@ -354,10 +354,18 @@ def _diagnose_correction_dependency(seg, block, cfg, verdict) -> None:
     if block.provenance.kind is not ProvenanceKind.TRANSCRIPT:
         return
     retry = check_block(block, corrected, cfg, verdict.segment_id, verdict.block_index)
+    # **`check_block` 有三種狀態。** `unverified` 是「找不到」，
+    # 而 `degenerate_copy` 是「**逐字**找到了」——後者是 presence 訊號，
+    # 不是另一種找不到。一個 block 對 raw 過不了門檻、對 corrected 卻逐字
+    # 命中，正是「靠校正才對得上」最強的證據，要標。
+    #
+    # 這裡不會誤標成「對 raw 也逐字命中」的情形：raw 與 corrected 只差
+    # 一個術語，若 block 逐字出現在 corrected，它對 raw 的相似度必然很高，
+    # 也就不會走到這個函式（前面已 return）。
     if retry.status is VerificationStatus.UNVERIFIED:
         return
     verdict.depends_on_correction = True
-    verdict.reason += (f"；換成**校正後**的逐字稿重跑會是 {retry.status.value}"
+    verdict.reason += (f"；換成**校正後**的逐字稿重跑會是 `{retry.status.value}`"
                        f"（相似度 {retry.similarity:.3f}）"
                        f"——只有靠 S4b 的術語校正才對得上，"
                        f"實質溯到的是投影片而非講者口述")

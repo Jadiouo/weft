@@ -403,3 +403,104 @@ def test_debug_markdown_image_links_resolve_from_the_markdown_location(tmp_path)
     assert links, "markdown 裡沒有任何圖片連結"
     for link in links:
         assert (md_path.parent / link).exists(), f"連結指不到實際檔案：{link}"
+
+
+# --------------------------------------------------------------------------
+# 產品輸出的重跑語意（票 01／02）
+#
+# 這幾條在這裡而不在 `test_e2e_offline.py`：它們用 `monkeypatch` 模擬
+# 「閘門擋下」與「寫檔失敗」，而 §5.5 #10 規定只有 `_unit_` 檔可以 mock。
+# 測的也確實是 `render.py` 的寫檔行為，不是端到端。
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def out_paths(tmp_path):
+    from weft.paths import OutPaths
+
+    out = OutPaths(tmp_path / "out")
+    out.ensure_dirs()
+    return out
+
+def test_needs_review_removes_previously_written_chunks(legal_ir, tmp_path, out_paths, monkeypatch):
+    """影片被 §5.4 擋下時，**上一版的 chunk 不得留在產品輸出裡**。
+
+    情境是真的會發生的：某支第一次跑通過、chunk 進了 chunks.jsonl；
+    之後改了 prompt 或溯源基準（票 01 就是），通過率掉到門檻以下 →
+    log 印「不寫入 chunks.jsonl」，但舊的內容原封不動留著。
+    那比重複更糟——一支已被判定不可信的影片，繼續用上一版的內容
+    留在知識庫裡，而且沒有任何一步會發現。
+    """
+    import json
+
+    from weft.stages.cloud import s6_render
+
+    from weft.config import Config
+    from weft.paths import WorkPaths
+
+    ir, _transcript, base = legal_ir
+    cfg = Config()
+    cfg.work_dir = tmp_path / "work"
+    cfg.out_dir = tmp_path / "out"
+    work = WorkPaths(cfg.work_dir, ir.meta.video_id)
+    work.ensure_dirs()
+    for png in (base / "03_slides").glob("*.png"):
+        (work.dir / "03_slides" / png.name).write_bytes(png.read_bytes())
+    out = out_paths
+
+    chunks = s6_render(cfg, ir, work, out)
+    assert chunks and out.chunks.exists()
+
+    # 讓這支影片這次過不了閘門
+    monkeypatch.setattr("weft.validation.thresholds.MAX_UNVERIFIED_RATIO", -1.0)
+    monkeypatch.setattr("weft.validation.provenance.MAX_UNVERIFIED_RATIO", -1.0)
+    assert s6_render(cfg, ir, work, out) == []
+
+    rows = [json.loads(x) for x in out.chunks.read_text(encoding="utf-8").splitlines() if x.strip()]
+    assert not [r for r in rows if r["metadata"]["video_id"] == ir.meta.video_id], (
+        "被擋下的影片仍有 chunk 留在 chunks.jsonl"
+    )
+
+
+def test_other_videos_survive_a_blocked_rerun(out_paths):
+    """擋下一支影片時不得波及別支。"""
+    import json
+
+    from weft.stages.render import drop_video_from_chunks
+
+    out = out_paths
+    out.chunks.parent.mkdir(parents=True, exist_ok=True)
+    out.chunks.write_text(
+        "\n".join(json.dumps({"id": f"{v}#0", "metadata": {"video_id": v}})
+                  for v in ("keep_me", "drop_me")) + "\n",
+        encoding="utf-8",
+    )
+    drop_video_from_chunks(out.chunks, "drop_me")
+
+    rows = [json.loads(x) for x in out.chunks.read_text(encoding="utf-8").splitlines() if x.strip()]
+    assert [r["metadata"]["video_id"] for r in rows] == ["keep_me"]
+
+
+def test_rewrite_is_atomic(legal_ir, tmp_path, out_paths, monkeypatch):
+    """寫到一半失敗時，既有內容不得消失。
+
+    改成「讀出→截斷→重寫」之後，最壞情況從「壞掉最後一行」變成
+    「整批不見」——批次跑數十支影片時那是實質的資料遺失。
+    """
+    import json
+
+    from weft.stages import render
+
+    out = out_paths
+    out.chunks.parent.mkdir(parents=True, exist_ok=True)
+    original = json.dumps({"id": "keep#0", "metadata": {"video_id": "keep"}}) + "\n"
+    out.chunks.write_text(original, encoding="utf-8")
+
+    def boom(*_a, **_k):
+        raise OSError("磁碟滿了")
+
+    monkeypatch.setattr(render.os, "replace", boom, raising=False)
+    with pytest.raises(OSError):
+        render.drop_video_from_chunks(out.chunks, "keep")
+
+    assert out.chunks.read_text(encoding="utf-8") == original

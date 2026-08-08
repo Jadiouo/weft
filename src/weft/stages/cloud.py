@@ -393,7 +393,13 @@ def s6_render(cfg: Config, ir: VideoIR, work: WorkPaths, out: OutPaths) -> list[
     但每個切片都要複製完整 metadata。
     """
     from ..validation.provenance import check_video
-    from .render import build_chunks, write_chunks, write_debug_markdown, write_unverified
+    from .render import (
+        build_chunks,
+        drop_video_from_chunks,
+        write_chunks,
+        write_debug_markdown,
+        write_unverified,
+    )
 
     out.ensure_dirs()
 
@@ -419,9 +425,13 @@ def s6_render(cfg: Config, ir: VideoIR, work: WorkPaths, out: OutPaths) -> list[
             work.video_id, ir.unverified_ratio * 100,
             MAX_UNVERIFIED_RATIO * 100, out.debug_md(ir.meta.video_id),
         )
+        # **上一版的 chunk 不得留在產品輸出裡。** 這支影片剛被判定不可信，
+        # 而它可能在上一次（門檻不同、prompt 不同、溯源基準不同）通過過。
+        # 只是「不寫入」的話，知識庫裡會留著一份沒有人再為它背書的內容。
+        drop_video_from_chunks(out.chunks, ir.meta.video_id)
         return []
 
-    written = write_chunks(chunks, out.chunks)
+    written = write_chunks(chunks, out.chunks, video_id=ir.meta.video_id)
     log.info("S6 %s：寫出 %d 個 chunk（溯源通過率 %.1f%%）",
              work.video_id, written, verdict.pass_rate * 100)
     return chunks

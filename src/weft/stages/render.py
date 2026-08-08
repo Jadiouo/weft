@@ -7,6 +7,8 @@ markdown 裝飾。」
 
 from __future__ import annotations
 
+import os
+
 import logging
 import re
 from pathlib import Path
@@ -125,7 +127,8 @@ def build_chunks(ir, cfg) -> tuple[list, list[str]]:
     return chunks, warnings
 
 
-def write_chunks(chunks: list, path: Path, append: bool = True) -> int:
+def write_chunks(chunks: list, path: Path, video_id: str | None = None,
+                 append: bool = True) -> int:
     """寫出 chunks.jsonl。
 
     `append=True` 是為了批次跑數十支影片時每支跑完就落地，中途失敗不會
@@ -134,26 +137,44 @@ def write_chunks(chunks: list, path: Path, append: bool = True) -> int:
     實測（2026-08-08）：`out/chunks.jsonl` 有 428 行，相異 `id` 只有 91 個，
     最高重複 **5 次**——重跑幾次就複製幾份。這是要進向量庫的產品輸出，
     重複的 chunk 會讓同一段內容在檢索結果裡佔掉數個名額。
-    `Chunk.id` 是穩定的（segment + block index），所以重複是可辨識的，
-    但沒有任何一步在辨識它。
 
-    與 `write_unverified` 同一個修法：先移除這支影片的舊行，再寫新的。
+    **`video_id` 要明講，不從 `chunks` 推導。** chunks 為空時（溯源未過、
+    整支被擋下）推導不出任何 video_id，舊版本的 chunk 就會原封不動留在
+    產品輸出裡——而 log 印的是「不寫入 chunks.jsonl」。那比重複更糟：
+    它讓一支已經被判定不可信的影片，繼續用上一版的內容留在知識庫裡。
+    """
+    ids = {video_id} if video_id else {c.metadata.video_id for c in chunks}
+    lines = [c.model_dump_json() for c in chunks]
+    _rewrite_excluding(path, ids if append else set(), lines, replace_all=not append)
+    return len(chunks)
+
+
+def drop_video_from_chunks(path: Path, video_id: str) -> None:
+    """把某支影片的所有 chunk 從產品輸出移除。
+
+    用於它被 §5.4 擋下的時候——**「不寫入」不等於「舊的可以留著」**。
+    """
+    _rewrite_excluding(path, {video_id}, [])
+
+
+def _rewrite_excluding(path: Path, video_ids: set[str], new_lines: list[str],
+                       replace_all: bool = False) -> None:
+    """保留既有檔案中不屬於 `video_ids` 的行，接上 `new_lines`，**原子換檔**。
+
+    先寫暫存檔再 `os.replace`：直接 `open("w")` 的話，批次跑到第 30 支時
+    被 Ctrl-C 或磁碟滿，前 29 支已落地的行會全部消失——那正好推翻
+    「中途失敗不會前功盡棄」。純 append 最壞只壞掉最後一行，
+    改成讀出→截斷→重寫之後，最壞是整批不見。
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not append:
-        with path.open("w", encoding="utf-8") as fh:
-            for chunk in chunks:
-                fh.write(chunk.model_dump_json() + "\n")
-        return len(chunks)
-
-    video_ids = {c.metadata.video_id for c in chunks}
-    kept = _lines_excluding_videos(path, video_ids)
-    with path.open("w", encoding="utf-8") as fh:
+    kept = [] if replace_all else _lines_excluding_videos(path, video_ids)
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8") as fh:
         for line in kept:
             fh.write(line + "\n")
-        for chunk in chunks:
-            fh.write(chunk.model_dump_json() + "\n")
-    return len(chunks)
+        for line in new_lines:
+            fh.write(line + "\n")
+    os.replace(tmp, path)
 
 
 def _lines_excluding_videos(path: Path, video_ids: set[str]) -> list[str]:
@@ -325,25 +346,23 @@ def write_unverified(verdict, path: Path) -> int:
     rows = [v for v in verdict.verdicts if v.status is not VerificationStatus.VERIFIED]
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    kept = _lines_excluding_videos(path, {verdict.video_id})
-    with path.open("w", encoding="utf-8") as fh:
-        for line in kept:
-            fh.write(line + "\n")
-        for v in rows:
-            fh.write(json.dumps({
-                "video_id": verdict.video_id,
-                "segment_id": v.segment_id,
-                "block_index": v.block_index,
-                "content_type": v.content_type,
-                "status": v.status.value,
-                "similarity": round(v.similarity, 4),
-                "copy_ratio": round(v.copy_ratio, 4),
-                "missing_entities": v.missing_entities,
-                # 成因分類。**混在 reason 字串裡等於沒有**——
-                # 人工複核要能一眼分出「歸屬標錯」「靠校正才成立」
-                # 「兩個來源都對不上」，那是三種不同的修法（R27、票 01）。
-                "wrong_source": v.wrong_source,
-                "depends_on_correction": v.depends_on_correction,
-                "reason": v.reason,
-            }, ensure_ascii=False) + "\n")
+    _rewrite_excluding(path, {verdict.video_id}, [
+        json.dumps({
+            "video_id": verdict.video_id,
+            "segment_id": v.segment_id,
+            "block_index": v.block_index,
+            "content_type": v.content_type,
+            "status": v.status.value,
+            "similarity": round(v.similarity, 4),
+            "copy_ratio": round(v.copy_ratio, 4),
+            "missing_entities": v.missing_entities,
+            # 成因分類。**混在 reason 字串裡等於沒有**——
+            # 人工複核要能一眼分出「歸屬標錯」「靠校正才成立」
+            # 「兩個來源都對不上」，那是三種不同的修法（R27、票 01）。
+            "wrong_source": v.wrong_source,
+            "depends_on_correction": v.depends_on_correction,
+            "reason": v.reason,
+        }, ensure_ascii=False)
+        for v in rows
+    ])
     return len(rows)

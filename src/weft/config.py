@@ -30,6 +30,18 @@ class S0Config(StageConfig):
     prefer_manual_caption: bool = True
     write_auto_caption: bool = True
     rate_limit: str | None = None
+    #: 給 yt-dlp 的 JavaScript runtime。`None` 表示用它的預設（只認 deno）。
+    #:
+    #: 這台機器有 node（v22）但沒有 deno，於是每次抽取都警告
+    #: 「No supported JavaScript runtime could be found」。指定 node 之後
+    #: 那個警告消失，但**實測格式數與解析度完全沒變**：
+    #:   預設    共 16 個格式｜視訊 9（最高 720p）｜純音訊 3
+    #:   指定 node 共 16 個格式｜視訊 9（最高 720p）｜純音訊 3
+    #:
+    #: 要再往上需要 `--remote-components ejs:github`，那會在**執行期從
+    #: GitHub 下載並執行腳本**。那是供應鏈層級的取捨，見 docs/FROZEN.md F10。
+    #: 已下載的三支全是 720p，R21／R22 的 slide_text CER 也全在 720p 上量的。
+    js_runtimes: dict[str, dict] | None = Field(default_factory=lambda: {"node": {}})
 
 
 class S1aConfig(StageConfig):

@@ -47,6 +47,21 @@ def parse_target(target: str) -> tuple[str | None, str | None]:
     return (found.group(1) if found else None), playlist_id
 
 
+def _runtime_opts(p) -> dict:
+    """把設定的 JS runtime 轉成 yt-dlp 的選項。`None` 時回傳空 dict
+    （用 yt-dlp 自己的預設，只認 deno）。
+
+    **必須傳副本。** yt-dlp 的 `_clean_js_runtimes` 對不支援的 runtime
+    直接 `runtimes.pop(rt)`，**就地修改傳進去的 dict**。傳設定物件本身的話，
+    runtime 名稱一旦打錯（或未來被 yt-dlp 移除），`cfg.s0.js_runtimes`
+    會在執行中途變成 `{}`——於是 `params_hash()` 在同一次執行裡前後不同，
+    §6.3 的快取判定跟著不穩，而且第二支影片起這個設定就靜默失效了。
+    """
+    if not p.js_runtimes:
+        return {}
+    return {"js_runtimes": {k: dict(v) for k, v in p.js_runtimes.items()}}
+
+
 def expand_playlist(playlist_id: str) -> list[PlaylistItem]:
     """展開 playlist 為影片清單，保留 episode_index（§3.5 的 metadata 欄位）。
 
@@ -93,7 +108,8 @@ def download(video_id: str, work, cfg) -> dict:
     p = cfg.s0
     url = f"https://www.youtube.com/watch?v={video_id}"
 
-    probe = {"quiet": True, "no_warnings": True, "skip_download": True}
+    probe = {"quiet": True, "no_warnings": True, "skip_download": True,
+             **_runtime_opts(p)}
     try:
         with yt_dlp.YoutubeDL(probe) as ydl:
             info = ydl.extract_info(url, download=False)
@@ -117,6 +133,7 @@ def download(video_id: str, work, cfg) -> dict:
             "subtitleslangs": [lang] if lang else [],
             "subtitlesformat": "vtt",
             "ratelimit": p.rate_limit,
+            **_runtime_opts(p),
         }
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
