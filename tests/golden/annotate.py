@@ -32,6 +32,7 @@ import numpy as np
 
 #: 提案階段刻意調低的門檻。寧可多給人工剔除，不可漏掉。
 PROPOSAL_PERCENTILE = 92.0
+#: **已停用**——固定間隔壓制會漏抓連續轉場中的真實換頁，見 propose_boundaries。
 PROPOSAL_MIN_GAP_SEC = 4.0
 
 
@@ -118,16 +119,76 @@ def propose_boundaries(frames_dir: Path, fps: float) -> list[float]:
 
     values = np.array(distances)
     threshold = float(np.percentile(values[1:], PROPOSAL_PERCENTILE))
-    min_gap = max(1, int(PROPOSAL_MIN_GAP_SEC * fps))
 
-    proposed: list[float] = []
-    last = -min_gap
-    for i, value in enumerate(values):
-        if i == 0 or value < threshold or i - last < min_gap:
-            continue
-        proposed.append(round(i / fps, 2))
-        last = i
+    # **把連續超過門檻的幀併成一個事件，取其中的峰。**
+    #
+    # 原本用「距上一個提案至少 PROPOSAL_MIN_GAP_SEC 秒」壓制，那會漏抓：
+    # 實測 cxrqHABhWOU 的 67 秒被採用後，68–70 秒的三秒交叉淡化整段被吃掉，
+    # 而那才是「19 胰腺」標題卡真正出現的地方。片頭每隔幾秒就換一次畫面，
+    # 固定間隔的壓制在那裡會連續吞掉真正的換頁。
+    #
+    # **ground truth 漏抓比誤抓嚴重**：漏掉一個真實邊界，S1b 正確找到它
+    # 反而被算成 FP，等於用錯的答案懲罰對的行為。誤抓只是多一筆人工判掉。
+    #
+    # 這仍然與受測的 S1b 完全不同——沒有 HMM、沒有 ink 遮罩、沒有時間先驗，
+    # 只是把同一次轉場的連續幀當成一個事件（§5.1(B) 第 4 條）。
+    proposed = _peaks(values, threshold)
+
+    # **補漏，直到沒有區間內部還有大跳動。**
+    #
+    # 事件分組會把「連續超過門檻的一整段」併成一個峰。片頭那種每隔幾秒
+    # 換一次的段落因此被壓成一兩個提案，真實的換頁藏在裡面。
+    # 這裡反過來檢查：相鄰提案之間的幀應該幾乎不動；如果中間還有大跳動，
+    # 那就是漏抓，補進去再驗一次。
+    #
+    # 頭尾各跳過 `_TRANSITION_SEC` 秒——交叉淡化的尾巴會落在下一個區間的
+    # 開頭，把它當成漏抓會無限迴圈。這個秒數與 §5.1(B) 第 2 條的容忍窗一致。
+    for _ in range(_MAX_REFINE_ROUNDS):
+        missed = _internal_peaks(values, proposed, _REFINE_THRESHOLD, fps)
+        if not missed:
+            break
+        proposed = sorted(set(proposed) | set(missed))
     return proposed
+
+
+#: 補漏用的**絕對**門檻。比 percentile 門檻寬鬆——提案器的工作是**別漏**，
+#: 誤報只是多一筆人工判掉，漏抓卻會讓 S1b 正確找到的邊界被算成 FP。
+_REFINE_THRESHOLD = 0.05
+#: 轉場容忍窗（§5.1(B) 第 2 條）。區間頭尾這麼多秒不算漏抓。
+_TRANSITION_SEC = 3
+#: 收斂上限。正常一兩輪就收斂；設上限只是不讓病態輸入卡住。
+_MAX_REFINE_ROUNDS = 8
+
+
+def _peaks(values, threshold: float) -> list[float]:
+    """把連續超過門檻的幀併成一個事件，每個事件取其中的峰。"""
+    out: list[float] = []
+    i = 1
+    while i < len(values):
+        if values[i] < threshold:
+            i += 1
+            continue
+        j = i
+        while j + 1 < len(values) and values[j + 1] >= threshold:
+            j += 1
+        out.append(float(i + int(np.argmax(values[i : j + 1]))))
+        i = j + 1
+    return out
+
+
+def _internal_peaks(values, proposed: list[float], threshold: float, fps: float) -> list[float]:
+    """相鄰提案之間仍然超過門檻的最大跳動。"""
+    bounds = [0.0, *proposed, float(len(values))]
+    found: list[float] = []
+    for a, b in zip(bounds, bounds[1:], strict=False):
+        lo, hi = int(a) + _TRANSITION_SEC, min(int(b), len(values))
+        if hi - lo < 2:
+            continue
+        window = values[lo:hi]
+        k = int(np.argmax(window))
+        if window[k] >= threshold:
+            found.append(round((lo + k) / fps, 2))
+    return found
 
 
 def contact_sheet(video: Path, times: list[float], out: Path, columns: int = 4) -> Path:

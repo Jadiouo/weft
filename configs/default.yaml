@@ -53,6 +53,7 @@ s3:
 #   gemini:gemini-3.1-flash-lite   花額度
 #   ollama:qwen2.5vl:7b            不花額度，R21 實測轉錄最準（跨集 CER 4.9%）
 #   ollama:gemma4:12b              不花額度，R21 實測分類最準（is_slide 95%）
+# prompt_version v5：判準改為「有沒有這一集特有的講解內容」（R26）
 s4a:
   model: gemini:gemini-3.1-flash-lite
   prompt_version: v5
@@ -64,8 +65,8 @@ s4:
   model: gemini:gemini-3.1-flash-lite
   # v0.4 預設不送圖——投影片文字已由 S4a 讀出並以文字掛進 prompt
   send_images: false
-  # v3：拆出 S4a 後本階段不再負責 is_slide 與 slide_text。改 prompt 必改此值。
-  prompt_version: v5
+  # v6：改寫 provenance_kind 的說明（R27：15/27 未通過是來源標錯）。改 prompt 必改此值。
+  prompt_version: v6
   batch_segments: 3
   prev_summary_max_chars: 200
   max_retries: 2

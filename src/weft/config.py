@@ -180,10 +180,22 @@ class S4Config(StageConfig):
     #: 再送一次圖等於讓同一個模型既產生來源又產生待驗證的內容（R9），
     #: 而且會把 D20 的錯位風險帶回來。要送必須明確打開。
     send_images: bool = False
+    #: v6（2026-08-08）：改寫 `provenance_kind` 的說明。R27 拆解四支影片
+    #: 27 筆溯源未通過，**15 筆是摘要投影片卻標成 transcript**——系統於是
+    #: 拿逐字稿去驗證一段其實抄自投影片的文字，必然對不上。內容是好的，
+    #: 只是來源標錯就被退回。新說明給的是可操作的判準（「把你寫的字拿去跟
+    #: 兩份材料比對，哪一份重疊多就標哪一份」）而不是語意判斷。
+    #:
+    #: v4/v5 這兩個號碼是**誤觸**的：改 S4a 的版本時用了未錨定的字串替換
+    #: （`prompt_version: str = "vN"` 在兩個類別裡長得一模一樣），把本階段
+    #: 一起 bump 了兩次。第二次更糟——它讓我改完 prompt 後版本**沒有變化**，
+    #: 快取直接命中，**新 prompt 從未被執行**，量出來卻只當成「改了沒用」。
+    #: 差一點就據此做出錯誤結論。見 decisions.md D30。
+    #:
     #: v3（2026-08-06）：拆出 S4a 後，本階段不再負責 is_slide 與 slide_text。
     #: **改了 prompt 就必須改這個**——否則舊快取會被當成新結果讀回來。
     #: v0.3 首跑的 07_understanding 是 v1，帶著 30.6% 的圖片錯位。
-    prompt_version: str = "v5"
+    prompt_version: str = "v6"
     #: 可將 2–3 個相鄰 segment 併為一次呼叫，但輸出仍逐 segment 分開
     batch_segments: int = 3
     prev_summary_max_chars: int = 200

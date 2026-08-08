@@ -127,10 +127,45 @@ def extract_named_entities(text: str) -> NamedEntities:
     )
 
 
+_CJK_VALUE = {"零": 0, "一": 1, "二": 2, "兩": 2, "三": 3, "四": 4, "五": 5,
+              "六": 6, "七": 7, "八": 8, "九": 9}
+_ARABIC_TO_CJK = {"0": "零", "1": "一", "2": "二", "3": "三", "4": "四",
+                  "5": "五", "6": "六", "7": "七", "8": "八", "9": "九"}
+
+
+def number_variants(entity: str) -> set[str]:
+    """同一個數值的其他寫法。
+
+    實測：block 寫「**兩**組靜脈」，投影片寫「**2**組靜脈」——同一個數字，
+    精確比對抓不到，於是整個 block 被判未通過（R27）。
+    「兩」與「二」也是同一個值。
+
+    **只處理十以下的單字數字**。十以上的中文數字（十五、二十四）換算規則
+    複雜，而且真正的幻覺多半改的是量級不是寫法；為了少數寫法差異去寫一個
+    半對的換算器，反而會讓「三十」與「三」互相匹配那種錯誤放行。
+    """
+    out = {entity}
+    if len(entity) == 1:
+        if entity in _CJK_VALUE:
+            v = _CJK_VALUE[entity]
+            out.add(str(v))
+            out |= {c for c, n in _CJK_VALUE.items() if n == v}
+        elif entity in _ARABIC_TO_CJK:
+            out.add(_ARABIC_TO_CJK[entity])
+            if entity == "2":
+                out.add("兩")
+    return out
+
+
 def unsupported_entities(candidate: str, source: str) -> list[str]:
-    """candidate 中出現、但來源沒有的具名實體。"""
+    """candidate 中出現、但來源沒有的具名實體。
+
+    數字比對前先正規化寫法（`number_variants`）——「兩」與「2」是同一個數，
+    寫法不同不是編造。書名與年代仍是精確比對。
+    """
     src = re.sub(r"\s+", "", source)
-    return sorted(e for e in extract_named_entities(candidate).all() if e and e not in src)
+    return sorted(e for e in extract_named_entities(candidate).all()
+                  if e and not any(w in src for w in number_variants(e)))
 
 
 # --------------------------------------------------------------------------

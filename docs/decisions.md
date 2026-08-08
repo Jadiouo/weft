@@ -999,3 +999,28 @@ assert T.TERM_CORRECTION_PRECISION == 0.90
 
 盤點的觸發時機也值得記：**這是在準備做另一件事（標註）時順手查出來的**。
 若不是先問「我要標什麼」，這三項可能會一直懸空下去。
+
+---
+
+## D30：未錨定的字串替換同時改到兩個階段的 `prompt_version`
+
+2026-08-08。改 S4a 的 prompt 版本時，我用的是
+
+```python
+s.replace('prompt_version: str = "v4"', 'prompt_version: str = "v5"')
+```
+
+`S4aConfig` 與 `S4Config` 的這一行**長得一模一樣**，於是 S4c 也被 bump 了。
+S4c 的 prompt 一個字都沒改，卻作廢了一輪快取並整支重跑。
+
+沒有造成錯誤結果——冪等鍵變嚴格只會多算，不會算錯。但它花掉的是真實時間，
+而且**版本號從此不再代表它宣稱的東西**：v4 這個號碼在 S4c 上沒有對應的
+prompt 變更。要到下一次真的改 prompt（R27 的來源歸屬）才名副其實。
+
+**教訓**：`prompt_version` 這種欄位名在多個設定類別裡重複出現，
+批次替換必須帶上足以區分的上下文（例如整個含註解的區塊），
+或者逐檔逐類確認。改完要看一眼 `grep -n 'prompt_version' src/weft/config.py`
+的全部結果，不是只看自己想改的那一行。
+
+同一次還有一個更隱蔽的版本：`configs/*.yaml` 裡的
+`.replace("prompt_version: v4", "prompt_version: v5")` 同樣打到兩處。

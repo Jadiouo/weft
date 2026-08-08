@@ -19,7 +19,7 @@ s4:
   # 逐段理解是純文字工作，用機器上既有的中文強模型。
   model: ollama:qwen2.5:14b
   send_images: false
-  prompt_version: v5
+  prompt_version: v6
 
 s5:
   model: ollama:qwen2.5:14b
