@@ -75,9 +75,13 @@ RESPONSE_SCHEMA = {
                                     "type": "string",
                                     "enum": ["slide_ocr", "transcript"],
                                 },
-                                "provenance_ref": {"type": "string"},
                             },
-                            "required": ["type", "text", "provenance_kind", "provenance_ref"],
+                            # `provenance_ref` **不向模型要**：一段只會拿到一張
+                            # 投影片的文字，合法來源只有一個，逐字稿的區間就是
+                            # 這一段的起訖。兩者都由管線填（`_canonicalize_refs`）。
+                            # 曾經要過，模型把 `slide_015` 寫成 `015`，查不到
+                            # 投影片 → 來源為空 → 未通過（R27）。
+                            "required": ["type", "text", "provenance_kind"],
                         },
                     },
                     "terms": {"type": "array", "items": {"type": "string"}},
@@ -148,31 +152,13 @@ SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的�
 1. **不得推測畫面上與逐字稿中都沒有的資訊。** 人名、書名、數字、年代
    尤其如此。系統會做自動溯源檢查，編造的內容會被標記並退回。
 
-2. **每個 content_block 都必須標註來源，而且要標對。**
+2. **每個 content_block 都要標對來源**：`provenance_kind` 只有兩個值。
 
-   - `provenance_kind: "slide_ocr"`——這段文字的**材料**來自投影片
-   - `provenance_kind: "transcript"`——這段文字的**材料**來自講者口述
+   - `slide_ocr`——這段話的**字**主要來自投影片
+   - `transcript`——這段話的**字**主要來自講者口述
 
-   `provenance_ref` 隨便填，系統會用正確的值覆蓋。**要標對的是 kind。**
-
-   **判斷方式：把你寫的這段話拿去跟兩份材料逐字比對，哪一份的字重疊得多，
-   就標哪一份。** 不是「這一段在講投影片的主題所以標 transcript」，
-   也不是「講者也講到了所以標 transcript」——看的是**你的字是從哪裡來的**。
-
-   最常見的錯誤是**摘要投影片卻標成 transcript**。實測（R27，四支影片）：
-
-   ```
-   你寫的內容        對逐字稿 0.000   對投影片 0.560   ← 應標 slide_ocr
-   你寫的內容        對逐字稿 0.088   對投影片 0.593   ← 應標 slide_ocr
-   ```
-
-   27 筆未通過中有 **15 筆**是這個錯。標錯的後果不是小事：
-   系統會拿逐字稿去驗證一段其實抄自投影片的文字，必然對不上，
-   整段被判為無法溯源。**內容是好的，只是來源標錯就被退回。**
-
-   投影片上有、講者沒說的（例如版面上的數字、標題、圖表標籤）→ `slide_ocr`。
-   講者說了、投影片上沒有的（比喻、離題、補充）→ `transcript`。
-   兩邊都有的，標**字面重疊比較多**的那一份。
+   **摘要投影片上的內容要標 `slide_ocr`**，即使講者同時也在講它。
+   標錯的話系統會拿另一份材料去驗證，必然對不上，整段被判無法溯源。
 
 3. **展開所有指涉性語句。** 「這個式子」要寫成它實際指的東西。輸出的每
    一段文字都會被單獨取出當作檢索結果，讀者看不到上下文。
@@ -489,11 +475,13 @@ def to_understanding(raw: dict, segment, cfg, slide_obj=None):
     blocks = []
     for i, item in enumerate(raw.get("content_blocks", [])):
         kind = item.get("provenance_kind")
-        ref = (item.get("provenance_ref") or "").strip()
-        if not kind or not ref:
-            log.warning("%s 的 block#%d 缺 provenance，已丟棄（§5.3 不變量 7）",
+        if not kind:
+            log.warning("%s 的 block#%d 缺 provenance_kind，已丟棄（§5.3 不變量 7）",
                         segment.segment_id, i)
             continue
+        # 佔位值，之後由 `_canonicalize_refs` 換成管線的權威值。
+        # **不能留空**——`Provenance.ref` 在 IR 是必填（§5.3 不變量 7）。
+        ref = "?"
         # 判定不是投影片時，不得有 slide_ocr 來源的 block——沒有投影片可溯源。
         # 這是 prompt 已明說的規則，但模型不一定照做，所以這裡也擋一次。
         if not is_slide and kind == "slide_ocr":

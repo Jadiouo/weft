@@ -51,7 +51,7 @@ def _prompts() -> dict[str, tuple[str, str]]:
 #: 只改雜湊不改版本 = 舊快取會被當新結果；只改版本不改雜湊 = 這裡會紅。
 EXPECTED: dict[str, tuple[str, str]] = {
     "s4a": ("v5", "fc587b13ef211912"),
-    "s4c": ("v6", "52b8c5b3975fb4d4"),
+    "s4c": ("v7", "d8e608a6b51ed2f8"),
     "s5": ("v1", "c82046a01f1ccf34"),
 }
 

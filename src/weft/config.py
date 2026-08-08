@@ -180,7 +180,15 @@ class S4Config(StageConfig):
     #: 再送一次圖等於讓同一個模型既產生來源又產生待驗證的內容（R9），
     #: 而且會把 D20 的錯位風險帶回來。要送必須明確打開。
     send_images: bool = False
-    #: v6（2026-08-08）：改寫 `provenance_kind` 的說明。R27 拆解四支影片
+    #: v7（2026-08-08）：`provenance_ref` **不再向模型要**（由管線填），
+    #: 並把來源歸屬的說明壓成三句。
+    #:
+    #: v6 是同一件事的失敗版本：我寫了整整一段（含實測數字表格）解釋怎麼標，
+    #: 還寫了「provenance_ref 隨便填」。結果 qwen2.5:14b 被帶偏，
+    #: **投影片段落產出 0 個 content_block**——167 個 block 掉到 21 個。
+    #: 教訓：給 14B 模型的規則要短。長篇解釋對人有用，對它是雜訊。
+    #:
+    #: v6 的原意：改寫 `provenance_kind` 的說明。R27 拆解四支影片
     #: 27 筆溯源未通過，**15 筆是摘要投影片卻標成 transcript**——系統於是
     #: 拿逐字稿去驗證一段其實抄自投影片的文字，必然對不上。內容是好的，
     #: 只是來源標錯就被退回。新說明給的是可操作的判準（「把你寫的字拿去跟
@@ -195,7 +203,7 @@ class S4Config(StageConfig):
     #: v3（2026-08-06）：拆出 S4a 後，本階段不再負責 is_slide 與 slide_text。
     #: **改了 prompt 就必須改這個**——否則舊快取會被當成新結果讀回來。
     #: v0.3 首跑的 07_understanding 是 v1，帶著 30.6% 的圖片錯位。
-    prompt_version: str = "v6"
+    prompt_version: str = "v7"
     #: 可將 2–3 個相鄰 segment 併為一次呼叫，但輸出仍逐 segment 分開
     batch_segments: int = 3
     prev_summary_max_chars: int = 200

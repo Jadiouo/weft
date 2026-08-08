@@ -22,6 +22,18 @@ def _batches(segments: list[Segment], size: int) -> list[list[Segment]]:
     return [segments[i : i + size] for i in range(0, len(segments), size)]
 
 
+#: 投影片段落中「沒有任何 content_block」的比例上限。
+#: **不是校準值，是保護性上限。** 正常執行實測是 0%（每個投影片段落都
+#: 至少產出一個 block）；壞掉那次是 70%（zIglvjoU9vo 33 段中 23 段空的）。
+#: 中間沒有樣本，所以 0.3 取的是「明顯不正常」而非某個分界。
+_MAX_BARREN_RATIO = 0.3
+#: 少於這個數量就不算比例。**1 個樣本算不出比例**——單元測試的假模型
+#: 只有 1 個投影片段落，比例必然是 0% 或 100%，兩者都不代表什麼。
+#: 代價：短到只有 4 個投影片段落的影片不受這道保護。可接受，
+#: 因為那種影片人工掃一眼就看得完。
+_MIN_SLIDE_SEGMENTS_FOR_BARREN_CHECK = 5
+
+
 def s4_understand(
     cfg: Config,
     work: WorkPaths,
@@ -175,6 +187,25 @@ def s4_understand(
 
     confirmed = sum(1 for u in results if u.is_slide)
     corrected = sum(len(u.corrections) for u in results)
+
+    # **投影片段落卻一個 content_block 都沒有，是壞掉不是「這頁沒東西可講」。**
+    #
+    # 實測（2026-08-08）：改壞 S4c 的 prompt 之後，四支影片的 block 從 167 個
+    # 掉到 21 個，而**每一項機械檢查都是綠的**——溯源通過率甚至更好看，
+    # 因為分母小了。管線照常產出一份少了 87% 內容的知識庫。
+    # 與 D22 的 rehydrate 靜靜回傳空的、S4a 的全軍覆沒同一類：
+    # 輸出「變少」不會自己報錯，必須主動檢查。
+    slide_segments = [u for u in results if u.is_slide]
+    barren = [u for u in slide_segments if not u.content_blocks]
+    if (len(slide_segments) >= _MIN_SLIDE_SEGMENTS_FOR_BARREN_CHECK
+            and len(barren) / len(slide_segments) > _MAX_BARREN_RATIO):
+        raise RuntimeError(
+            f"S4c {work.video_id}：{len(slide_segments)} 個投影片段落中有 "
+            f"{len(barren)} 個（{len(barren) / len(slide_segments):.0%}）"
+            f"沒有產出任何 content_block，超過上限 {_MAX_BARREN_RATIO:.0%}。"
+            f"這通常是 prompt 或 schema 壞了，不是素材沒東西可講。"
+            f"已中止，不產出殘缺的知識庫。"
+        )
     log.info("S4c %s：%d/%d 個 segment 完成（%d 個判定為投影片，%d 筆術語校正）。%s",
              work.video_id, len(results), len(segments), confirmed, corrected,
              ledger.summary(p.model) if metered else f"本地模型 {p.model}，不佔額度")

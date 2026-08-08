@@ -66,7 +66,7 @@ s4:
   # v0.4 預設不送圖——投影片文字已由 S4a 讀出並以文字掛進 prompt
   send_images: false
   # v6：改寫 provenance_kind 的說明（R27：15/27 未通過是來源標錯）。改 prompt 必改此值。
-  prompt_version: v6
+  prompt_version: v7
   batch_segments: 3
   prev_summary_max_chars: 200
   max_retries: 2
