@@ -176,3 +176,69 @@ def test_guard_fires_when_everything_is_one_group(tmp_path, patched):
     stats = s1c_dedup(Config(), _FakeWork(tmp_path, None), slides, None)
     assert stats["skipped"] is not None
     assert all(s.duplicate_of is None for s in slides)
+
+
+# ---------------------------------------------------------------------------
+# R25：分組必須與**獨立的度量**一致
+#
+# `slide_groups` 的第一版是從 S1c 自己的輸出抄的——循環論證，
+# 100% 是必然的不是成績（SDD §5.1(B) 第 4 條明文禁止）。
+# 人工複核只擋得到誤併，擋不到漏併：複核者看的是演算法給的分組，
+# 不會被問到「有沒有該分而沒分的」。
+# ---------------------------------------------------------------------------
+
+def test_grouping_agrees_with_an_independent_metric():
+    """ink Jaccard 的分組，用**原始像素平均絕對差**去驗——兩者不得有重疊。
+
+    受測演算法看前景圖樣（Otsu 遮罩），驗證者看整體亮度分布，機制不同。
+    實測三支影片 1,000+ 個配對零分歧。
+    """
+    import json
+    from pathlib import Path
+
+    import cv2
+    import numpy as np
+
+    work_root = Path("work")
+    checked = 0
+    for golden in sorted(Path("tests/golden").glob("*.golden.json")):
+        video_id = json.loads(golden.read_text(encoding="utf-8"))["video_id"]
+        dedup_path = work_root / video_id / "04_dedup.json"
+        if not dedup_path.exists():
+            continue
+
+        dedup = json.loads(dedup_path.read_text(encoding="utf-8"))["slides"]
+        rep = {s: (info["duplicate_of"] or s) for s, info in dedup.items()}
+        sids = sorted(rep)
+        tiny = {}
+        for sid in sids:
+            img = cv2.imread(str(work_root / video_id / "03_slides" / f"{sid}.png"),
+                             cv2.IMREAD_GRAYSCALE)
+            if img is None:
+                continue
+            tiny[sid] = cv2.resize(img, (160, 90),
+                                   interpolation=cv2.INTER_AREA).astype(np.int16)
+        if len(tiny) < 2:
+            continue
+
+        merged, apart = [], []
+        for i, a in enumerate(sids):
+            if a not in tiny:
+                continue
+            for b in sids[i + 1:]:
+                if b not in tiny:
+                    continue
+                diff = float(np.abs(tiny[a] - tiny[b]).mean()) / 255
+                (merged if rep[a] == rep[b] else apart).append(diff)
+        if not merged or not apart:
+            continue
+
+        checked += 1
+        assert min(apart) > max(merged), (
+            f"{video_id}：ink Jaccard 的分組與像素差不一致——"
+            f"未合併最小 {min(apart):.4f} ≤ 已合併最大 {max(merged):.4f}。"
+            f"兩個獨立度量畫不出同一條線時，分組很可能是演算法的產物。"
+        )
+
+    if not checked:
+        pytest.skip("沒有任何影片同時有黃金集與 04_dedup.json")
