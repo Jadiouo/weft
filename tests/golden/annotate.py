@@ -65,6 +65,14 @@ class GoldenAnnotation:
     #: `slide_id → 代表幀的 slide_id`。同一張投影片反覆出現時的分組，
     #: 對應 **S1c 去重**（§4.3b）。代表幀自己指向自己。
     slide_groups: dict[str, str] = field(default_factory=dict)
+    #: **保留集**：這一支不得用來調 prompt 或調參數，只用來量測。
+    #:
+    #: 存在的理由是實測。「看得到講者 → 不是投影片」這條規則在三支
+    #: 攝影棚素材上拿到 58/58 = 1.000，看起來問題解決了；換到講堂實景的
+    #: 保留集立刻掉到 0.909，錯的兩張正是講者站在投影幕前的分割畫面。
+    #: **調校集上的滿分不能當成判準正確的證據。**
+    #: 這是 §5.1(B) 第 4 條（提案演算法須與受測演算法不同）在 prompt 上的對應。
+    holdout: bool = False
     notes: str = ""
 
     @property

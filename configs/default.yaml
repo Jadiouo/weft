@@ -55,7 +55,7 @@ s3:
 #   ollama:gemma4:12b              不花額度，R21 實測分類最準（is_slide 95%）
 s4a:
   model: gemini:gemini-3.1-flash-lite
-  prompt_version: v2
+  prompt_version: v5
   max_retries: 2
   retry_backoff_sec: 4.0
 
@@ -65,7 +65,7 @@ s4:
   # v0.4 預設不送圖——投影片文字已由 S4a 讀出並以文字掛進 prompt
   send_images: false
   # v3：拆出 S4a 後本階段不再負責 is_slide 與 slide_text。改 prompt 必改此值。
-  prompt_version: v4
+  prompt_version: v5
   batch_segments: 3
   prev_summary_max_chars: 200
   max_retries: 2

@@ -322,10 +322,18 @@ def test_slide_classification_on_real_videos(cfg: Config):
 
         accuracy = classification_accuracy([p for p, _ in pairs], [g for _, g in pairs])
         if accuracy < SLIDE_CLASSIFICATION_ACCURACY:
-            failures.append(f"{annotation.video_id}: {accuracy:.3f}（n={len(pairs)}）")
+            kind = "保留集" if annotation.holdout else "調校集"
+            failures.append(f"{annotation.video_id}[{kind}]: {accuracy:.3f}（n={len(pairs)}）")
 
     if not evaluated:
         pytest.skip("黃金集中沒有任何影片跑過 S4a")
+    # **保留集必須存在。** 只有調校集的話，這個門檻量到的是「prompt 對這幾支
+    # 影片調得好不好」，不是「判準對不對」。實測：某一版判準在調校集拿到
+    # 58/58 = 1.000，在保留集只有 0.909，而且錯的正是它結構上處理不了的那類。
+    assert any(a.holdout for a in annotations), (
+        "黃金集中沒有任何一支標為 holdout。調 prompt 用的影片不能同時當量測對象——"
+        "請取一支從未跑過 S4a 的影片標註，並在檔案裡設 holdout=true。"
+    )
     assert not failures, (
         f"（已評估 {len(evaluated)}/{len(annotations)} 支）\n" + "\n".join(failures)
     )
