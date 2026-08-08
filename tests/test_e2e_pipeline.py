@@ -307,6 +307,17 @@ def test_slide_classification_on_real_videos(cfg: Config):
             pairs.append(("slide" if got else "speaker",
                           "slide" if expected else "speaker"))
         assert pairs, f"{annotation.video_id}：標註的 slide_id 與 S4a 的輸出對不上"
+
+        # **跑到一半的目錄不准當成跑完的。** S4a 逐張落地，中斷的執行
+        # 看起來與完成的執行一模一樣：目錄在、檔案是好的、只是少幾張。
+        # 實測用 5/22 張跑出過綠燈——分母小，剛好都對就過了。
+        # 黃金集的 `slide_groups` 獨立地說了有幾張相異投影片，拿它當分母。
+        expected_reps = len(set(annotation.slide_groups.values()))
+        assert len(pairs) >= expected_reps, (
+            f"{annotation.video_id}：只有 {len(pairs)} 張有 S4a 結果，"
+            f"黃金集分組說應該有 {expected_reps} 張相異投影片。"
+            f"這是**跑到一半**，不是一次有效的量測——不得以此判定通過。"
+        )
         evaluated.append(annotation.video_id)
 
         accuracy = classification_accuracy([p for p, _ in pairs], [g for _, g in pairs])

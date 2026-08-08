@@ -120,7 +120,8 @@ def test_cache_is_keyed_by_model_and_prompt_version(work, monkeypatch):
     s4a_understand_slides(cfg, work, [_slide("slide_001")])
     assert len(calls) == 1, "同設定第二次應命中快取"
 
-    cfg.s4a.prompt_version = "v2"
+    # **相對於當前預設**，不寫死版本字串——否則預設一 bump 這個測試就失效
+    cfg.s4a.prompt_version = cfg.s4a.prompt_version + "-changed"
     s4a_understand_slides(cfg, work, [_slide("slide_001")])
     assert len(calls) == 2, "改了 prompt_version 就必須重跑"
 

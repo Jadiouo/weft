@@ -130,9 +130,28 @@ class S4aConfig(StageConfig):
     #: block 都會拿假來源去驗證。實跑 qwen2.5vl 單模型時 7 個誤報，
     #: 溯源未通過比例 24.3%。
     classifier_model: str | None = None
-    prompt_version: str = "v1"
+    #: v2（2026-08-07）：分類定義改為「有沒有為講解而製作、合成上去、
+    #: **且承載本次主題**的資訊性內容」，取代原本會自相矛盾的「畫面主體」敘述。
+    #: 原定義下主講人簡介同時滿足兩邊（有活鏡頭→不是、有排版文字→是），
+    #: 模型在該類上的準確率是 46.7%（近乎擲骰）。
+    #: 主講人簡介依使用者決定歸為**不是**投影片（第 4 條），
+    #: 黃金集有 5 張標註因此由 T 改 F。見 docs/proposals/slide-definition.md。
+    prompt_version: str = "v2"
     max_retries: int = 2
     retry_backoff_sec: float = 4.0
+    #: **第二個描述模型**，用來對 `description` 做一致性檢查（R23）。
+    #: `None` 關閉。
+    #:
+    #: R23 量到多模型一致性對描述編造的分離度 **13.59x**（事實主張平均被
+    #: 1.81/3 個模型提到，編造只有 0.13/3）。這一道**不阻擋產出**——
+    #: §5.4 對 `圖表描述` 的分離度是 0.00x，本來就沒有自動閘門可用；
+    #: 目的是把 §5.6 的人工抽檢**引導到最可能出錯的那幾張**，
+    #: 目前抽檢沒有任何優先序，等於全片平均分配注意力。
+    description_checker_model: str | None = None
+    #: 兩份描述的 bigram containment 低於此值即標記 `needs_review`。
+    #: **未經校準**——R23 量的是「主張層級」的一致性，這裡用的是
+    #: 粗得多的整段相似度。先記錄分布，累積後再定。
+    description_agreement_min: float = 0.25
 
 
 class S4Config(StageConfig):

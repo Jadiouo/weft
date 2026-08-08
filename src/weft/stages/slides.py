@@ -27,12 +27,29 @@ SYSTEM_PROMPT = """你在為一個「講經影片 → 可檢索知識庫」的�
 
 ### 1. 判斷這張圖是不是投影片（`is_slide`）
 
-**是投影片**：畫面主體為文字、圖表、經文、流程圖等準備好的教材內容。
-**不是投影片**：講者的攝影棚鏡頭、片頭片尾動畫、純裝飾畫面、會場全景。
+**是投影片**：畫面上有「為講解而製作、**合成上去**的資訊性內容」，
+且該內容**承載本次講解的主題**。
 
-注意：講者所在的攝影棚背景**經常有大量裝飾文字**（標語、書法、招牌）。
-那些是**佈景**，不是投影片內容。判斷依據是「這是為了講解而製作的教材」，
-不是「畫面上有沒有字」。
+**算**：全螢幕的經文／圖表／解剖圖／條列說明；章節標題卡；系列標題。
+畫面中同時有講者**不影響判定**——看的是有沒有那層講解內容。
+
+**不算**，四種：
+
+1. **實體佈景**——攝影棚背板上的書法標語、招牌、會場全景。
+   那是拍攝現場的一部分，不是為這次講解製作的。
+2. **品牌動畫**——太極片頭、頻道 logo、片尾訂閱畫面。
+3. **純講者鏡頭**——沒有任何合成文字的攝影棚畫面。
+4. **主講人簡介**——講者鏡頭上疊了姓名、現任、學經歷。
+   那些字確實是合成上去的，但講的是**講者是誰**，不是本次的主題。
+
+**最容易搞混的兩組**：
+- 講者坐在滿是書法的背板前 → **不算**（實體佈景）；
+  同一個講者鏡頭上疊了本次要講的條列 → **算**。
+- 講者鏡頭疊上排版好的「現任／學歷」 → **不算**（第 4 條）；
+  同樣版式但疊的是經文或圖表 → **算**。
+
+判準不是「畫面上有沒有字」，也不是「有沒有講者」，
+而是**那些字是不是為這次講解的內容合成上去的**。
 
 `is_slide: false` 時填 `reject_reason`（一句話），其餘欄位留空字串。
 
@@ -81,14 +98,29 @@ USER_PROMPT = "這是不是投影片？若是，逐字轉錄並描述版面。"
 #: 溯源未通過比例 24.3%。
 CLASSIFY_SYSTEM = """你在判斷一張從講經影片抽出的靜止畫面**是不是投影片**。
 
-**是投影片**：畫面主體為文字、圖表、經文、流程圖等準備好的教材內容。
-**不是投影片**：講者的攝影棚鏡頭、片頭片尾動畫、純裝飾畫面、會場全景。
+**是投影片**：畫面上有「為講解而製作、**合成上去**的資訊性內容」，
+且該內容**承載本次講解的主題**。
 
-注意：講者所在的攝影棚背景**經常有大量裝飾文字**（標語、書法、招牌）。
-那些是**佈景**，不是投影片內容。判斷依據是「這是為了講解而製作的教材」，
-不是「畫面上有沒有字」。
+**算**：全螢幕的經文／圖表／解剖圖／條列說明；章節標題卡；系列標題。
+畫面中同時有講者**不影響判定**——看的是有沒有那層講解內容。
 
-畫面中若看得到講者本人，幾乎都不是投影片。
+**不算**，四種：
+
+1. **實體佈景**——攝影棚背板上的書法標語、招牌、會場全景。
+   那是拍攝現場的一部分，不是為這次講解製作的。
+2. **品牌動畫**——太極片頭、頻道 logo、片尾訂閱畫面。
+3. **純講者鏡頭**——沒有任何合成文字的攝影棚畫面。
+4. **主講人簡介**——講者鏡頭上疊了姓名、現任、學經歷。
+   那些字確實是合成上去的，但講的是**講者是誰**，不是本次的主題。
+
+**最容易搞混的兩組**：
+- 講者坐在滿是書法的背板前 → **不算**（實體佈景）；
+  同一個講者鏡頭上疊了本次要講的條列 → **算**。
+- 講者鏡頭疊上排版好的「現任／學歷」 → **不算**（第 4 條）；
+  同樣版式但疊的是經文或圖表 → **算**。
+
+判準不是「畫面上有沒有字」，也不是「有沒有講者」，
+而是**那些字是不是為這次講解的內容合成上去的**。
 
 只輸出 JSON。"""
 
@@ -135,6 +167,47 @@ def understand_slide(spec: str, image: bytes) -> dict:
     return payload
 
 
+#: 第二個模型的描述任務（R23）。**只描述、不轉錄**——要比對的是
+#: 「這張圖上有什麼」，混進逐字轉錄會讓兩份文字因為 OCR 差異而失分，
+#: 量到的就不是描述的可信度了。
+DESCRIBE_SYSTEM = """你在描述一張講經投影片的**版面與圖像內容**。
+
+只寫你**確實看得見**的東西：有幾欄、標題在哪、有沒有圖、圖畫的是什麼、
+用了哪些顏色。**不要**推測講者想表達什麼，**不要**補充背景知識，
+**不要**逐字抄錄投影片上的文字（那由另一個步驟負責）。
+
+不確定的就不要寫。寫少不扣分，寫錯才扣分。
+
+只輸出 JSON。"""
+
+DESCRIBE_SCHEMA = {
+    "type": "object",
+    "properties": {"description": {"type": "string"}},
+    "required": ["description"],
+}
+
+
+def describe_slide(spec: str, image: bytes) -> dict:
+    result = generate(spec, DESCRIBE_SYSTEM,
+                      [Part(text="這張圖上有什麼？"), Part(image=image)],
+                      DESCRIBE_SCHEMA, temperature=TRANSCRIBE_TEMPERATURE)
+    return {"description": (result.payload.get("description") or "").strip(),
+            "model_used": result.model_used}
+
+
+def description_agreement(first: str, second: str) -> float:
+    """兩份描述的雙向 bigram containment 取小者。
+
+    **取小不取平均**：一份詳細、一份簡略時，簡略那份會被詳細那份完全包含，
+    單向分數接近 1.0 卻什麼也沒驗證到。取小者才會反映「兩邊都提到的比例」。
+    """
+    from ..validation.provenance import containment
+
+    if not first or not second:
+        return 0.0
+    return min(containment(first, second), containment(second, first))
+
+
 def _cache_path(work, slide_id: str):
     return work.slide_understanding_dir / f"{slide_id}.json"
 
@@ -163,6 +236,8 @@ def apply_to_slide(slide: Slide, payload: dict) -> None:
         slide.slide_text = None
         slide.layout_description = None
         slide.reject_reason = (payload.get("reject_reason") or "").strip() or "未說明"
+    agree = payload.get("description_agreement")
+    slide.description_agreement = None if agree is None else float(agree)
 
 
 def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
@@ -257,6 +332,15 @@ def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
             log.info("S4a %s：%s 判定不是投影片（%s）", work.video_id, slide.slide_id,
                      payload.get("reject_reason") or "未說明")
 
+    # ---- 第 3 趟：描述一致性把關（R23，選配）-------------------------
+    # **不阻擋產出。** §5.4 對 `圖表描述` 的分離度是 0.00x——跨語言時
+    # 忠實的描述本身 containment 就是 0，那型別沒有任何自動閘門可用。
+    # 這一趟做的是**把 §5.6 的人工抽檢引導到最可能出錯的幾張**：
+    # 目前抽檢沒有優先序，等於全片平均分配注意力。
+    # R23 量到多模型一致性對「編造的事實主張」分離度 13.59x。
+    if p.description_checker_model:
+        _check_descriptions(cfg, work, reps, on_call, stats)
+
     # **全軍覆沒時大聲失敗，不要靜靜產出空的。**
     # 實測：ollama 服務沒開時 19 張全部連線失敗，每一張都「留空並繼續」，
     # 管線照樣往下走並產出一份沒有任何投影片文字的知識庫——
@@ -276,6 +360,45 @@ def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
              work.video_id, stats["representatives"], stats["cached"],
              stats["failed"], stats["is_slide"])
     return stats
+
+
+def _check_descriptions(cfg, work, reps: list[Slide], on_call, stats: dict) -> None:
+    """用第二個模型重描述一次，記下一致度。**只標記，不改寫也不擋。**
+
+    只跑判定為投影片、且第一份描述非空的代表幀——非投影片沒有描述可比，
+    第一份是空的表示轉錄那趟就失敗了，那是另一個問題。
+    """
+    p = cfg.s4a
+    flagged = 0
+    for slide in reps:
+        if not slide.layout_description:
+            continue
+        cached = _load_cached(work, slide.slide_id, p.model, p.prompt_version) or {}
+        if cached.get("description_agreement") is not None:
+            slide.description_agreement = float(cached["description_agreement"])
+            continue
+        image = (work.dir / slide.image_path).read_bytes()
+        try:
+            second = _retry(lambda img=image: describe_slide(p.description_checker_model, img),
+                            p, on_call, slide.slide_id)
+        except Exception as exc:  # noqa: BLE001
+            # 把關失敗**不影響主產出**——它本來就只是抽檢的排序訊號
+            log.warning("S4a %s：%s 描述複驗失敗，略過——%s",
+                        work.video_id, slide.slide_id, str(exc)[:120])
+            continue
+        if on_call:
+            on_call(p.description_checker_model, 0, 0, slide.slide_id, "ok")
+        score = description_agreement(slide.layout_description, second["description"])
+        slide.description_agreement = score
+        cached["description_agreement"] = score
+        cached["description_checker"] = second["model_used"]
+        cached["description_second"] = second["description"]  # 留著供人工比對
+        _write_cache(work, slide.slide_id, cached)
+        if score < p.description_agreement_min:
+            flagged += 1
+            log.info("S4a %s：%s 描述一致度 %.3f < %.2f，建議人工複核",
+                     work.video_id, slide.slide_id, score, p.description_agreement_min)
+    stats["description_flagged"] = flagged
 
 
 def _retry(fn, p, on_call, slide_id):
@@ -301,6 +424,9 @@ def _propagate(slides: list[Slide]) -> None:
             slide.slide_text = rep.slide_text
             slide.layout_description = rep.layout_description
             slide.reject_reason = rep.reject_reason
+            # 衍生狀態要**每一條路都重建**（D22）——漏掉這行，被合併的
+            # 候選幀在人工抽檢清單上永遠是「沒量過」，而它們共用同一份描述
+            slide.description_agreement = rep.description_agreement
 
 
 def rehydrate(cfg, work, slides: list[Slide]) -> int:

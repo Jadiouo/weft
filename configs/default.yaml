@@ -55,7 +55,7 @@ s3:
 #   ollama:gemma4:12b              不花額度，R21 實測分類最準（is_slide 95%）
 s4a:
   model: gemini:gemini-3.1-flash-lite
-  prompt_version: v1
+  prompt_version: v2
   max_retries: 2
   retry_backoff_sec: 4.0
 
