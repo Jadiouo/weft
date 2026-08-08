@@ -303,6 +303,13 @@ class ContentBlock(Strict):
     provenance: Provenance  # 無 default —— 缺了就無法建構
     verification: VerificationStatus | None = None  # 由 §5.4 溯源檢查填入
     similarity: Score | None = None
+    #: 未通過的**成因分類**，由 §5.4 填入。三種未通過的修法完全不同
+    #: （R27、票 01），混在一個 `unverified` 裡等於看不見：
+    #:   `wrong_source`            內容溯得到同一段的**另一個**來源 → 修 S4c 的 prompt
+    #:   `depends_on_correction`   只靠 S4b 的術語校正才對得上 → 實質溯到投影片
+    #:   兩者皆否                   兩個來源都對不上 → 才是真的要判內容
+    wrong_source: bool = False
+    depends_on_correction: bool = False
 
 
 class Understanding(Strict):

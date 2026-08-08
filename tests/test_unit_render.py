@@ -227,13 +227,49 @@ def test_chunks_jsonl_is_one_object_per_line(legal_ir, tmp_path):
 
 
 def test_chunks_jsonl_appends_across_videos(legal_ir, tmp_path):
-    """批次跑數十支影片時，每支跑完就落地，中途失敗不會前功盡棄。"""
+    """批次跑數十支影片時，每支跑完就落地，中途失敗不會前功盡棄。
+
+    **測的是不同影片。** 原本這條拿同一份 IR 寫兩次、斷言行數變兩倍——
+    名字說 across videos，內容測的卻是「同一支重跑會複製一份」，
+    等於把缺陷寫成期望行為。實測 `out/chunks.jsonl` 因此累積到 428 行，
+    相異 id 只有 91 個。
+    """
+    ir, _, _ = legal_ir
+    chunks, _ = build_chunks(ir, cfg())
+    path = tmp_path / "chunks.jsonl"
+    write_chunks(chunks, path)
+
+    other = ir.model_copy(deep=True)
+    other.meta.video_id = "OTHER_VIDEO"
+    other_chunks, _ = build_chunks(other, cfg())
+    for c in other_chunks:
+        c.metadata.video_id = "OTHER_VIDEO"
+    write_chunks(other_chunks, path)
+
+    assert len(path.read_text(encoding="utf-8").strip().splitlines()) == (
+        len(chunks) + len(other_chunks)
+    )
+
+
+def test_chunks_jsonl_replaces_same_video_on_rerun(legal_ir, tmp_path):
+    """重跑同一支影片不得讓 chunks.jsonl 出現重複的 chunk。
+
+    `chunks.jsonl` 是要進向量庫的產品輸出。重複的 chunk 會讓同一段內容
+    在檢索結果裡佔掉數個名額。`Chunk.id` 是穩定的，所以重複是可辨識的。
+    """
+    import json
+
     ir, _, _ = legal_ir
     chunks, _ = build_chunks(ir, cfg())
     path = tmp_path / "chunks.jsonl"
     write_chunks(chunks, path)
     write_chunks(chunks, path)
-    assert len(path.read_text(encoding="utf-8").strip().splitlines()) == 2 * len(chunks)
+    write_chunks(chunks, path)
+
+    rows = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
+    assert len(rows) == len(chunks)
+    assert len({r["id"] for r in rows}) == len(chunks)
+
 
 
 def test_debug_markdown_contains_clickable_timestamps(legal_ir, tmp_path):

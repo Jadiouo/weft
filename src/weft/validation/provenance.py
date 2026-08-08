@@ -187,6 +187,11 @@ class BlockVerdict:
     #: 這是歸屬錯誤不是幻覺，**修法完全不同**——要修的是 S4c 的 prompt，
     #: 不是內容品質。仍然算未通過。
     wrong_source: bool = False
+    #: 未通過，但**對校正後的逐字稿對得上**（見 `_diagnose_correction_dependency`）。
+    #: 它引用的詞在原始逐字稿裡是同音錯字，正確寫法只出現在投影片上——
+    #: 所以它實質溯到的是投影片。仍然算未通過：術語校正的 precision 門檻
+    #: 是 0.90，沒有餘裕，不能拿它當「有出處」的依據。
+    depends_on_correction: bool = False
 
 
 @dataclass
@@ -206,6 +211,11 @@ class VideoVerdict:
     def wrong_source(self) -> list[BlockVerdict]:
         """未通過、但溯得到同段另一個來源的。修的是歸屬不是內容。"""
         return [v for v in self.verdicts if v.wrong_source]
+
+    @property
+    def depends_on_correction(self) -> list[BlockVerdict]:
+        """未通過、但只靠 S4b 的校正才對得上的。實質溯到投影片。"""
+        return [v for v in self.verdicts if v.depends_on_correction]
 
     @property
     def unverified_ratio(self) -> float:
@@ -314,6 +324,45 @@ def _diagnose_wrong_source(ir, seg, block, transcript: str, cfg, verdict) -> Non
         verdict.wrong_source = True
 
 
+def _diagnose_correction_dependency(seg, block, cfg, verdict) -> None:
+    """未通過時，看看它是不是**只有靠 S4b 的校正才對得上**。
+
+    這種 block 的處境是：它引用的詞在原始逐字稿裡是同音錯字，
+    正確寫法只出現在投影片上。所以**它實質溯到的是投影片，不是講者口述**。
+
+    **判定方式是把整個 `check_block` 對校正後的逐字稿再跑一次**，不是比相似度。
+    比相似度會說謊：`check_block` 有三種未通過的成因（相似度、來源長度比、
+    具名實體），一個因「來源長度僅 8%」而失敗的 block，它對校正後版本的
+    相似度照樣可以高過門檻——於是被蓋上「靠校正才對得上」的章，
+    而實際上換成校正後版本重跑它仍然不會過。**那是一句假話寫進人工複核文件。**
+    而且 `圖表描述` 的相似度門檻是 0.0，比相似度的寫法對它**數學上不可能成立**。
+
+    **只標記，不改判為通過。** 校正本身是模型的判讀——R13 的三道閘
+    （正確寫法出現在投影片上、拼音相符、長度相近）擋掉了大部分誤改，
+    但 §5.2 給術語校正的 precision 門檻是 0.90，**沒有餘裕**。
+    拿一個 90% 準的東西當「有出處」的依據，等於把 10% 的模型判讀
+    寫成事實。標記出來，讓 §5.6 的人工抽檢決定。
+
+    與 `_diagnose_wrong_source` 是兩件事：那個問「是不是標錯來源型別」，
+    這個問「是不是靠校正才成立」。同一個 block 可能兩者皆是。
+    """
+    if verdict.status is not VerificationStatus.UNVERIFIED:
+        return
+    corrected = seg.transcript_corrected or ""
+    if not corrected.strip() or corrected == seg.transcript_raw:
+        return
+    if block.provenance.kind is not ProvenanceKind.TRANSCRIPT:
+        return
+    retry = check_block(block, corrected, cfg, verdict.segment_id, verdict.block_index)
+    if retry.status is VerificationStatus.UNVERIFIED:
+        return
+    verdict.depends_on_correction = True
+    verdict.reason += (f"；換成**校正後**的逐字稿重跑會是 {retry.status.value}"
+                       f"（相似度 {retry.similarity:.3f}）"
+                       f"——只有靠 S4b 的術語校正才對得上，"
+                       f"實質溯到的是投影片而非講者口述")
+
+
 def check_video(ir: VideoIR, cfg: ProvenanceConfig) -> VideoVerdict:
     """跑完整支影片的溯源檢查，並就地填回 block 的 verification / similarity。"""
     verdicts: list[BlockVerdict] = []
@@ -322,13 +371,31 @@ def check_video(ir: VideoIR, cfg: ProvenanceConfig) -> VideoVerdict:
     for seg in ir.segments:
         if seg.understanding is None:
             continue
-        transcript = seg.transcript_corrected or seg.transcript_raw
+        # **基準永遠是 `transcript_raw`，不是校正後的版本。**
+        #
+        # S4b 用投影片文字校正逐字稿的同音錯字（§4.7b）。拿校正後的逐字稿
+        # 去驗證同樣來自投影片的內容，是**用來源 A 驗證來源 A**——
+        # 投影片的資訊被寫進逐字稿，繞一圈回來當成獨立佐證。
+        # 模型若把投影片讀錯，那個錯誤會被溯源檢查蓋章認證。
+        #
+        # §5.4 已警告過獨立性下降，但實作比警告描述的更嚴重一級：
+        # 警告說的是「來源由 VLM 產生」，實際發生的是「兩個來源已經混在一起」。
+        #
+        # `transcript_raw` 一旦寫入即為唯讀（§5.3 不變量 9），所以它是
+        # 這條管線裡唯一不會被任何模型碰過的東西。
+        transcript = seg.transcript_raw
         for i, block in enumerate(seg.understanding.content_blocks):
             source = resolve_source(ir, block, transcript)
             verdict = check_block(block, source, cfg, seg.segment_id, i)
             _diagnose_wrong_source(ir, seg, block, transcript, cfg, verdict)
+            _diagnose_correction_dependency(seg, block, cfg, verdict)
             block.verification = verdict.status
             block.similarity = verdict.similarity
+            # 成因也寫回 block，不只留在 verdict 上——`08_video.json` 與
+            # §5.6 的人工複核文件讀的都是 block，成因留在 verdict 裡的話
+            # 下游一律看不到（票 01 的驗收條件之一）。
+            block.wrong_source = verdict.wrong_source
+            block.depends_on_correction = verdict.depends_on_correction
             verdicts.append(verdict)
             bucket = copy_counts.setdefault(str(block.type), [0, 0])
             bucket[1] += 1

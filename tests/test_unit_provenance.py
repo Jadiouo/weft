@@ -381,3 +381,132 @@ def test_cross_language_description_is_not_rejected():
     assert verdict.status is VerificationStatus.VERIFIED, (
         "圖表描述的門檻應低到不誤殺跨語言的忠實翻譯"
     )
+
+
+# --------------------------------------------------------------------------
+# 票 01：溯源基準必須是 transcript_raw，不是校正後的版本
+# --------------------------------------------------------------------------
+
+#: 兩份逐字稿只差一個術語：ASR 把「識蘊」聽成「時運」。
+#: 這是 R18 實測的典型形態——**等長同音替換**，不是隨機噪音。
+_RAW = "這一段講的是時運進入的時機，父精母血在此時凝結成形，講者用簽約來比喻。"
+_CORRECTED = _RAW.replace("時運", "識蘊")
+
+#: 這幾條用 `經文原文`（門檻 0.60）而不是 `白話解說`（0.10）。
+#: **不是為了讓測試好過**——R12 實測 containment 只對經文原文有鑑別力
+#: （分離 7.50x），白話解說是 1.14x，門檻低到單一術語的差異推不動它。
+#: 用一個本來就擋不住東西的型別去測「基準換了會怎樣」，測不到東西。
+_QUOTE_TYPE = ContentType.SCRIPTURE
+
+
+def _ir_with_correction(raw: str, corrected: str, block_text: str):
+    """一支只有一段的 IR，那一段的逐字稿有 raw／corrected 兩個版本。
+
+    刻意不用 `factories.make_ir`——這裡要控制的正是 raw 與 corrected 的差異，
+    而工廠給的是一份「合法」資料。反例要精準地只動一個性質。
+    """
+    from weft.ir import (
+        BoundaryMethod,
+        Segment,
+        SegmentMode,
+        Understanding,
+        VideoIR,
+        VideoMeta,
+    )
+
+    seg = Segment(
+        segment_id="v#000", video_id="v", t_start=0.0, t_end=30.0,
+        mode=SegmentMode.TRANSCRIPT_ONLY, boundary_method=BoundaryMethod.VIDEO_BOUNDS,
+        transcript_raw=raw, transcript_corrected=corrected,
+        understanding=Understanding(
+            is_slide=False, summary="",
+            # **來源型別必須是 transcript**——這幾條測的正是逐字稿基準。
+            # 用預設的 `block()`（slide_ocr）會走到另一條路：沒有投影片
+            # → 來源為空 → 因「來源長度 0%」未通過，測不到要測的東西。
+            content_blocks=[ContentBlock(
+                type=_QUOTE_TYPE, text=block_text,
+                provenance=Provenance(kind=ProvenanceKind.TRANSCRIPT, ref="0.0s-30.0s"),
+            )],
+        ),
+    )
+    return VideoIR(
+        meta=VideoMeta(video_id="v", title="t", duration=30.0, url="u"),
+        slides=[], segments=[seg],
+    )
+
+
+def test_baseline_is_raw_not_corrected():
+    """校正後才對得上的內容**不得**被判為通過。
+
+    這是 §5.4 獨立性的核心：S4b 用投影片校正逐字稿，再拿逐字稿驗證
+    同樣來自投影片的內容，等於用來源 A 驗證來源 A。
+    """
+    ir = _ir_with_correction(_RAW, _CORRECTED, "識蘊進入")
+    (v,) = p.check_video(ir, cfg()).verdicts
+    assert v.status is VerificationStatus.UNVERIFIED, (
+        "以校正後的逐字稿為基準時這一筆會通過——那正是要修掉的循環"
+    )
+
+
+def test_correction_dependent_block_is_flagged_not_silent():
+    """未通過的同時要說得出「它是靠校正才對得上的」。
+
+    票 01：「一段內容如果只有靠校正才對得上，會被標記出來，而不是靜默通過。」
+    沒有這個標記，它會混在「兩個來源都對不上」裡，而那是完全不同的修法。
+    """
+    ir = _ir_with_correction(_RAW, _CORRECTED, "識蘊進入")
+    verdict = p.check_video(ir, cfg())
+    (v,) = verdict.verdicts
+    assert v.depends_on_correction is True
+    assert "校正" in v.reason
+    assert verdict.depends_on_correction == [v]
+
+
+def test_content_matching_raw_is_untouched():
+    """對原始逐字稿本來就對得上的內容，不受這次改動影響。
+
+    沒有這一條，上面兩個測試可以靠「把所有東西都判成未通過」通過。
+    """
+    ir = _ir_with_correction(_RAW, _CORRECTED, "父精母血在此時凝結")
+    (v,) = p.check_video(ir, cfg()).verdicts
+    assert v.status is VerificationStatus.VERIFIED
+    assert v.depends_on_correction is False
+
+
+def test_no_correction_means_no_flag():
+    """raw 與 corrected 相同時不得標記——那一段根本沒有校正可依賴。"""
+    ir = _ir_with_correction(_RAW, _RAW, "識蘊進入")
+    (v,) = p.check_video(ir, cfg()).verdicts
+    assert v.status is VerificationStatus.UNVERIFIED
+    assert v.depends_on_correction is False
+
+
+def test_unverified_jsonl_replaces_same_video_on_rerun(tmp_path):
+    """重跑同一支影片不得讓 unverified.jsonl 累積重複紀錄。
+
+    §5.6 的人工複核要從這個檔案數「有幾筆要看」。純附加模式下跑兩次
+    就變成兩倍，而且新舊程式碼的紀錄混在一起分不出來。
+    """
+    import json
+
+    from weft.stages.render import write_unverified
+
+    path = tmp_path / "unverified.jsonl"
+    ir = _ir_with_correction(_RAW, _CORRECTED, "識蘊進入")
+    verdict = p.check_video(ir, cfg())
+    assert verdict.unverified, "這份 fixture 要有未通過的條目，否則測不到東西"
+
+    write_unverified(verdict, path)
+    first = path.read_text(encoding="utf-8").splitlines()
+    write_unverified(verdict, path)
+    second = path.read_text(encoding="utf-8").splitlines()
+    assert first == second, "重跑同一支影片後檔案內容應完全相同"
+
+    # 別支影片的紀錄不得被清掉
+    path.write_text("\n".join([*second,
+        json.dumps({"video_id": "other", "segment_id": "other#000"})]) + "\n",
+        encoding="utf-8")
+    write_unverified(verdict, path)
+    kept = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
+    assert any(r["video_id"] == "other" for r in kept)
+    assert sum(1 for r in kept if r["video_id"] == "v") == len(verdict.unverified)
