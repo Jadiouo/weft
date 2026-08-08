@@ -272,8 +272,31 @@ def _index_of(work: WorkPaths, segment: Segment) -> int:
     return int(segment.segment_id.rsplit("#", 1)[-1])
 
 
+def segment_fingerprint(segment: Segment) -> str:
+    """這個 segment 的**輸入**指紋：逐字稿原文 + 指到的投影片 + 時間範圍。
+
+    §4.7 的冪等鍵原本只有 `segment_id + prompt_version + model`，
+    而 `segment_id` 是位置編號。**換一種分段方式，同一個編號涵蓋的內容
+    就完全不同**，舊快取卻照樣命中。實測 v0.5 換成逐字稿主幹之後，
+    cxrqHABhWOU 的 `#010` 從 72–98 秒變成 564–593 秒，理解結果卻沿用舊的
+    ——溯源通過率 0.929 → 0.071，而每一項機械檢查都是綠的。
+
+    用 `transcript_raw` 而不是 corrected：後者會被 S4b 改，
+    而改了不代表要重新理解。時間範圍也納入，因為同樣的文字落在不同
+    時段時 `slide_ref` 可能不同。
+    """
+    import hashlib
+
+    h = hashlib.sha256()
+    h.update(f"{segment.t_start:.3f}|{segment.t_end:.3f}|".encode())
+    h.update((segment.slide_ref or segment.candidate_ref or "").encode())
+    h.update(b"|")
+    h.update(segment.transcript_raw.encode())
+    return h.hexdigest()[:16]
+
+
 def _load_cached(work: WorkPaths, segment: Segment, cfg) -> Understanding | None:
-    """讀取既有結果。冪等鍵含 prompt_version 與 model——換了就得重跑（§4.7）。"""
+    """讀取既有結果。冪等鍵含 prompt_version、model **與輸入指紋**（§4.7）。"""
     path = work.understanding(_index_of(work, segment))
     if not path.exists():
         return None
@@ -283,12 +306,19 @@ def _load_cached(work: WorkPaths, segment: Segment, cfg) -> Understanding | None
         return None
     if cached.model_used != cfg.model or cached.prompt_version != cfg.prompt_version:
         return None
+    fingerprint = segment_fingerprint(segment)
+    if cached.input_fingerprint != fingerprint:
+        # 舊快取沒有這個欄位（None）時也走這裡——**保守地重跑**。
+        # 讓沒有指紋的快取命中，等於相信一個無法驗證的假設。
+        log.info("%s 的輸入變了（或快取來自舊版），重跑", segment.segment_id)
+        return None
     segment.understanding = cached
     return cached
 
 
 def _save(work: WorkPaths, segment: Segment, understanding: Understanding) -> None:
     """每 segment 一檔，便於斷點續跑（§3.1、§6.3）。"""
+    understanding.input_fingerprint = segment_fingerprint(segment)
     path = work.understanding(_index_of(work, segment))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(understanding.model_dump_json(indent=2), encoding="utf-8")

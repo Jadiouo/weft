@@ -48,8 +48,10 @@ class TranscriptSource(StrEnum):
 
 
 class BoundaryMethod(StrEnum):
-    SLIDE_SWITCH = "slide_switch"  # 純時間戳粗切，未吸附
+    SLIDE_SWITCH = "slide_switch"  # 純時間戳粗切，未吸附（v0.4 以前的主幹）
     SEMANTIC_SNAP = "semantic_snap"  # embedding 吸附後
+    #: v0.5 的主幹：逐字稿的話題邊界（TextTiling）。**不看畫面。**
+    TOPIC_SHIFT = "topic_shift"
     VIDEO_BOUNDS = "video_bounds"  # transcript_only：整片一段
 
 
@@ -330,6 +332,16 @@ class Understanding(Strict):
     unverified_claims: list[str] = Field(default_factory=list)
     model_used: str | None = None  # §5.5 #6：本地 fallback 必須留痕
     prompt_version: str | None = None
+    #: 產生這份理解時，那個 segment 的**輸入指紋**（逐字稿 + 投影片）。
+    #:
+    #: §4.7 的冪等鍵原本只有 `segment_id + prompt_version + model`，而
+    #: `segment_id` 是**位置編號**（`#010`）。v0.5 換掉分段方式之後，
+    #: `#010` 涵蓋的時間範圍完全不同，**舊快取照樣命中**——實測
+    #: cxrqHABhWOU 的 `#010` 現在是 564–593 秒，快取裡卻是 72–98 秒的內容。
+    #: 溯源通過率因此從 0.929 掉到 0.071，而**沒有任何機械檢查會抓到**：
+    #: 每個欄位都在、格式都對，只是講的是別的地方的事。這與 D20 的
+    #: 圖片錯位同一類。
+    input_fingerprint: str | None = None
 
 
 # --------------------------------------------------------------------------

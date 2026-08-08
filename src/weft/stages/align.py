@@ -78,3 +78,30 @@ def assign_cues(windows: list[Window], cues) -> list[list[int]]:
     return buckets
 
 
+
+
+def topic_windows(boundaries: list[float], duration: float,
+                  candidates) -> list[Window]:
+    """把話題邊界轉成 `Window`，並註記每一段螢幕上是哪一張投影片。
+
+    **投影片不決定切在哪裡**（票 07：那樣做的召回上限只有 0.50／0.60），
+    它只回答「這一段螢幕上是哪一張」。取**時間重疊最久**的那一張——
+    一段話題可能橫跨兩張圖，取重疊最久的比取第一張合理，
+    而且對「講者對著同一張圖講完兩件事」那種情形，兩段會拿到同一張。
+
+    重疊為零時 `slide_id` 是 `None`——那段話沒有畫面可指，硬指一張
+    就是給 §5.4 一個假的來源。
+    """
+    edges = [0.0, *sorted(boundaries), duration]
+    cands = sorted(candidates, key=lambda x: x.t_start)
+    out: list[Window] = []
+    for a, b in zip(edges, edges[1:], strict=False):
+        if b <= a:
+            continue
+        best, best_overlap = None, 0.0
+        for c in cands:
+            overlap = min(b, c.t_end) - max(a, c.t_start)
+            if overlap > best_overlap:
+                best, best_overlap = c, overlap
+        out.append(Window(a, b, f"slide_{best.index + 1:03d}" if best else None))
+    return out or [Window(0.0, duration, None)]

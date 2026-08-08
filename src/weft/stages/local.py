@@ -229,11 +229,14 @@ def s1b_slides(cfg: Config, work: WorkPaths) -> tuple[CandidateSet, list[Slide]]
 def s3_align(
     cfg: Config, work: WorkPaths, transcript: Transcript, candidates: CandidateSet
 ) -> list[Segment]:
-    """S3 對齊。SDD §4.6。**這一步不呼叫 LLM**，避免與 S4 形成循環依賴。
+    """S3 分段。SDD §4.6（v0.5 改寫）。**這一步不呼叫 LLM**。
 
-    **v0.3 只做粗切。** 語意邊界吸附需要投影片文字來判斷「這句話比較像前
-    一張還是後一張」；v0.3 移除本地 OCR 後，投影片文字要到 S4 才有，而
-    §4.6 禁止 S3 呼叫 LLM。這是簡化的已知代價，記在 known-risks R10。
+    **主幹是逐字稿，不是投影片切換。** v0.4 以前由切換決定分段，
+    那不是準不準的問題而是結構性的：講者對著同一張圖講完兩件事時，
+    它一刀都不會切。票 07 實測保留集召回只有 0.60，純語意是 0.93。
+
+    投影片降級為「這一段螢幕上是哪一張」的註記（`topic_windows`），
+    **不參與決定切在哪裡**。
 
     `mode` 在此只是**暫定**——有候選幀就先標 slide，S4 判定 `is_slide=false`
     時會降級為 speaker_only 並清掉 slide_ref。
@@ -241,10 +244,23 @@ def s3_align(
     冪等鍵：transcript_hash + candidates_hash + s3_params_hash
     """
     from ..ir import BoundaryMethod, Segment, SegmentMode
-    from .align import assign_cues, coarse_windows
+    from .align import assign_cues, coarse_windows, topic_windows
+    from .segment import enforce_min_length, topic_boundaries
 
     p = cfg.s3
-    windows = coarse_windows(candidates.candidates, candidates.duration, p.min_segment_sec)
+    if p.method == "slide":
+        # v0.4 的行為，保留是為了能做對照，**不是建議值**
+        windows = coarse_windows(candidates.candidates, candidates.duration,
+                                 p.min_segment_sec)
+        method = BoundaryMethod.SLIDE_SWITCH
+    else:
+        cuts = enforce_min_length(
+            topic_boundaries(transcript.cues, p.block_chars, p.block_window),
+            candidates.duration, p.min_segment_sec)
+        windows = topic_windows(cuts, candidates.duration, candidates.candidates)
+        method = BoundaryMethod.TOPIC_SHIFT
+        log.info("S3 %s：逐字稿切出 %d 個話題邊界（方法 %s，偽句 %d 字）",
+                 work.video_id, len(cuts), p.method, p.block_chars)
     buckets = assign_cues(windows, transcript.cues)
     by_index = {c.index: c for c in transcript.cues}
 
@@ -268,14 +284,12 @@ def s3_align(
                 transcript_raw="".join(c.text_raw for c in picked),
                 transcript_corrected="".join(c.text_corrected or c.text_raw for c in picked),
                 corrections=[c for cue in picked for c in cue.corrections],
-                boundary_method=(
-                    BoundaryMethod.SLIDE_SWITCH if i > 0 else BoundaryMethod.VIDEO_BOUNDS
-                ),
+                boundary_method=(method if i > 0 else BoundaryMethod.VIDEO_BOUNDS),
             )
         )
 
     work.segments.write_text(
         "[" + ",".join(s.model_dump_json() for s in segments) + "]", encoding="utf-8"
     )
-    log.info("S3 %s：%d 個 segment（粗切，未做語意吸附）", work.video_id, len(segments))
+    log.info("S3 %s：%d 個 segment（%s）", work.video_id, len(segments), method.value)
     return segments
