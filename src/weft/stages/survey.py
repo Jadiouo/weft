@@ -52,6 +52,11 @@ class VideoProfile:
     #: 第 14、27 集換了攝影棚背景（木質牆 vs 水墨山景），
     #: 「一個系列跑一次 S-1」的假設因此不成立（SDD v0.4 §4.0）。
     background_fingerprint: list[float] = field(default_factory=list)
+    #: 這一支屬於哪個系列。**票 04 新增**：S-1 的比較基準改為
+    #: 「本系列已跑過影片的彙總」，沒有這個欄位就分不出哪些是同系列的。
+    #: `None` 表示單支處理，或**舊的 profile 檔**（那時還沒這個欄位）——
+    #: 兩者都會被 `series_baseline` 排除在基準之外，而不是誤算進去。
+    series_id: str | None = None
     #: 相異投影片數 ÷ 候選幀數。SDD §4.3b 要求納入 profile：
     #: 這個比例在同系列各集之間若大幅跳動，代表去重門檻不能通用。
     distinct_ratio: float | None = None
@@ -92,7 +97,16 @@ class SeriesProfile:
 # 門檻——§5.2 量的是演算法準不準，這裡量的是**素材適不適用現有設計**。
 # --------------------------------------------------------------------------
 
-#: 1. 講者佔比偏離 §1.3 記載值（81.1%）超過此幅度
+#: 1. 講者佔比的比較基準。**只用於記錄，不再中止**（v0.5 票 04）。
+#:
+#: §4.0 自己寫「這個階段只回答**這一支能不能用現有設計處理**」，
+#: 但這條判準問的是「這一支像不像中醫講經第 1 集」——那是兩件事。
+#: 純螢幕錄影（無講者入鏡）會嚴重偏離它，而那其實是**更好處理**的情況。
+#: 機器人學課程十之八九會誤中止。
+#:
+#: **基準改為本系列已跑過影片的彙總**，只有系列第一支才退回 §1.3 的
+#: 81.1%——那個數字是單支影片的觀察，v0.2 已把它降級為「範例，不是設計
+#: 前提」，拿它當跨系列的通則正是這個 repo 犯過三次的同一個錯。
 SPEAKER_RATIO_REFERENCE = 0.811
 SPEAKER_RATIO_TOLERANCE = 0.20
 
@@ -195,6 +209,7 @@ def profile_video(video_id: str, work, cfg) -> VideoProfile:
 
     return VideoProfile(
         video_id=video_id,
+        series_id=meta.series_id,
         duration=len(paths) / p.fps,
         frame_count=len(paths),
         fullscreen_ratio=float(is_fullscreen.mean()),
@@ -283,25 +298,32 @@ def background_notes(profiles: list[VideoProfile]) -> list[str]:
 
 
 def check_mismatches(profiles: list[VideoProfile]) -> list[str]:
-    """SDD §4.0 的四條中止條件。"""
+    """SDD §4.0 的中止條件。**只回傳真的處理不了的。**
+
+    「偏離」與「處理不了」是兩件事（v0.5 票 04）。畫面結構與中醫講經
+    不同不代表跑不動——偏離走 `deviation_notes`，只有這裡的才中止。
+    """
     problems: list[str] = []
     if not profiles:
         return ["沒有任何影片可勘查"]
 
-    speaker_ratio = statistics.mean(1.0 - v.fullscreen_ratio for v in profiles)
-    if abs(speaker_ratio - SPEAKER_RATIO_REFERENCE) > SPEAKER_RATIO_TOLERANCE:
-        problems.append(
-            f"講者佔比 {speaker_ratio:.1%} 偏離 §1.3 記載的 "
-            f"{SPEAKER_RATIO_REFERENCE:.1%} 超過 ±{SPEAKER_RATIO_TOLERANCE:.0%}"
-            "——這個系列的畫面結構與現有設計的假設不同"
-        )
+    # 判準 1（講者佔比）已移出中止條件，改為 `deviation_notes` 的記錄項。
 
-    worst = min(v.mode_separation for v in profiles)
-    if worst < MIN_MODE_SEPARATION:
-        problems.append(
-            f"模式分離度最低只有 {worst:.2f}x（要求 ≥{MIN_MODE_SEPARATION}x）"
-            "——§4.3 步驟 2 的二分類在這個系列上不可靠"
-        )
+    single_mode = [v for v in profiles if _is_single_mode(v)]
+    two_mode = [v for v in profiles if not _is_single_mode(v)]
+    if two_mode:
+        worst = min(v.mode_separation for v in two_mode)
+        if worst < MIN_MODE_SEPARATION:
+            problems.append(
+                f"模式分離度最低只有 {worst:.2f}x（要求 ≥{MIN_MODE_SEPARATION}x）"
+                "——§4.3 步驟 2 的二分類在這個系列上不可靠"
+            )
+    elif single_mode:
+        # **全片單一模式時分離度沒有意義**，不是不可靠。純螢幕錄影
+        # （全程投影片）與純口播（全程講者）都會落在這裡，而兩者都比
+        # 混合素材好處理。拿一個無意義的數字去中止是誤判。
+        log.info("S-1：%d 支為單一畫面模式，跳過分離度判準（那個數字對它們沒有意義）",
+                 len(single_mode))
 
     density = max(v.sections_per_minute for v in profiles)
     if density > MAX_SECTIONS_PER_MINUTE:
@@ -323,6 +345,54 @@ def check_mismatches(profiles: list[VideoProfile]) -> list[str]:
     return problems
 
 
+#: 全螢幕佔比落在這個區間之外，視為「單一畫面模式」。
+#: 純螢幕錄影趨近 1.0、純口播趨近 0.0，兩者的「模式分離度」都沒有意義。
+#: 0.05 是保護性邊界不是校準值——實測樣本目前只有中醫講經（0.19–0.28）。
+SINGLE_MODE_MARGIN = 0.05
+
+
+def _is_single_mode(profile: VideoProfile) -> bool:
+    return (profile.fullscreen_ratio < SINGLE_MODE_MARGIN
+            or profile.fullscreen_ratio > 1.0 - SINGLE_MODE_MARGIN)
+
+
+def series_baseline(out_dir, series_id: str | None) -> tuple[float, str]:
+    """本系列已跑過影片的講者佔比彙總。回傳 `(基準值, 來源說明)`。
+
+    **系列第一支才退回 §1.3。** 那個 81.1% 是單支影片的觀察，
+    v0.2 已把它降級為「範例，不是設計前提」——拿它當跨系列的通則，
+    與 v0.1 把單支推廣成系列通則是同一個錯。
+    """
+    known = [v for v in load_video_profiles(out_dir)
+             if series_id and v.series_id == series_id]
+    if not known:
+        return SPEAKER_RATIO_REFERENCE, "§1.3（本系列尚無已跑過的影片）"
+    ratio = statistics.mean(1.0 - v.fullscreen_ratio for v in known)
+    return ratio, f"本系列已跑過的 {len(known)} 支彙總"
+
+
+def deviation_notes(profiles: list[VideoProfile], baseline: float,
+                    source: str) -> list[str]:
+    """**偏離但不中止**的觀察。
+
+    畫面結構與基準不同不代表處理不了。純螢幕錄影會嚴重偏離講者佔比，
+    但它是更好處理的情況——把它算成中止條件會讓整個系列跑不起來。
+    """
+    if not profiles:
+        return []
+    ratio = statistics.mean(1.0 - v.fullscreen_ratio for v in profiles)
+    if abs(ratio - baseline) <= SPEAKER_RATIO_TOLERANCE:
+        return []
+    direction = "更少" if ratio < baseline else "更多"
+    return [
+        f"講者佔比 {ratio:.1%}，偏離基準 {baseline:.1%}（{source}）"
+        f"超過 ±{SPEAKER_RATIO_TOLERANCE:.0%}——畫面上的講者比基準{direction}。"
+        f"**這不是中止條件**：v0.5 起主幹是逐字稿，投影片是輔助，"
+        f"兩個方向的偏離都跑得動（票 04）。記下來是為了讓 §5.6 的抽檢知道"
+        f"這批素材與既有黃金集不同型態。"
+    ]
+
+
 def survey(video_ids: list[str], cfg, series_id: str | None = None) -> SeriesProfile:
     """跑完一個系列的勘查。SDD §4.0。"""
     from ..paths import WorkPaths
@@ -341,11 +411,12 @@ def survey(video_ids: list[str], cfg, series_id: str | None = None) -> SeriesPro
                  profiles[-1].sections_per_minute,
                  -(-profiles[-1].section_count // 3))
 
+    baseline, source = series_baseline(cfg.out_dir, series_id)
     return SeriesProfile(
         series_id=series_id,
         videos=profiles,
         mismatches=check_mismatches(profiles),
-        notes=background_notes(profiles),
+        notes=background_notes(profiles) + deviation_notes(profiles, baseline, source),
     )
 
 
@@ -378,10 +449,18 @@ def load_video_profiles(out_dir: Path) -> list[VideoProfile]:
             data = json.loads(path.read_text(encoding="utf-8"))
         except Exception:  # noqa: BLE001
             continue
-        if "video_id" not in data or "series_id" in data:
+        # **用 `videos` 而不是 `series_id` 當判別式。** 票 04 把 `series_id`
+        # 加進逐支 profile 之後，舊的判別式會把每一支都當成彙總檔排除掉——
+        # 而症狀是「基準永遠退回 §1.3」，看起來像設定沒生效，不像讀檔壞了。
+        if "video_id" not in data or "videos" in data:
             continue  # 系列彙總檔，不是逐支的
         known = {f for f in VideoProfile.__dataclass_fields__}
-        out.append(VideoProfile(**{k: v for k, v in data.items() if k in known}))
+        # `series_id` 是票 04 才加的，舊的 profile 檔沒有這個鍵。
+        # 缺的話補 None——那表示「不知道它屬於哪個系列」，
+        # `series_baseline` 會把它排除在基準之外，而不是誤算進去。
+        fields = {k: v for k, v in data.items() if k in known}
+        fields.setdefault("series_id", None)
+        out.append(VideoProfile(**fields))
     return out
 
 

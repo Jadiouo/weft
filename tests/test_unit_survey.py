@@ -56,10 +56,63 @@ def test_empty_input_is_a_mismatch():
 # --------------------------------------------------------------------------
 
 
-def test_speaker_ratio_far_from_reference_is_flagged():
-    """整片都是投影片（例如錄屏教學）——畫面結構與現有設計的假設不同。"""
-    problems = check_mismatches([profile(fullscreen_ratio=0.95)])
-    assert any("講者佔比" in p for p in problems)
+def test_speaker_ratio_deviation_is_recorded_not_aborted():
+    """整片都是投影片（錄屏教學）——**偏離，但不中止**（票 04）。
+
+    §4.0 自己寫「這個階段只回答這一支能不能用現有設計處理」，而
+    「像不像中醫講經第 1 集」是另一件事。純螢幕錄影嚴重偏離講者佔比，
+    但它是**更好處理**的情況——把它算成中止條件會讓整個系列跑不起來。
+    """
+    from weft.stages.survey import SPEAKER_RATIO_REFERENCE, deviation_notes
+
+    screencast = profile(fullscreen_ratio=0.95)
+    assert not any("講者佔比" in p for p in check_mismatches([screencast]))
+
+    notes = deviation_notes([screencast], SPEAKER_RATIO_REFERENCE, "§1.3")
+    assert any("講者佔比" in n for n in notes)
+    assert any("不是中止條件" in n for n in notes)
+
+
+def test_single_mode_material_does_not_abort_on_separation():
+    """全片單一模式時「模式分離度」沒有意義，不得據此中止。
+
+    純螢幕錄影（全程投影片）與純口播（全程講者）都會落在這裡，
+    而兩者都比混合素材好處理。拿一個無意義的數字去中止是誤判。
+    """
+    assert check_mismatches([profile(fullscreen_ratio=0.99, mode_separation=1.0)]) == []
+    assert check_mismatches([profile(fullscreen_ratio=0.01, mode_separation=1.0)]) == []
+    # 混合素材仍然要擋
+    assert any("分離度" in p
+               for p in check_mismatches([profile(fullscreen_ratio=0.5, mode_separation=1.0)]))
+
+
+def test_baseline_prefers_the_series_over_section_1_3(tmp_path):
+    """基準是**本系列已跑過的影片**，只有第一支才退回 §1.3。
+
+    §1.3 的 81.1% 是單支影片的觀察，v0.2 已把它降級為「範例，不是設計
+    前提」。拿它當跨系列的通則，與 v0.1 把單支推廣成系列通則是同一個錯。
+    """
+    from weft.stages.survey import (
+        SPEAKER_RATIO_REFERENCE,
+        series_baseline,
+        write_video_profile,
+    )
+
+    value, source = series_baseline(tmp_path, "PL_new")
+    assert value == SPEAKER_RATIO_REFERENCE
+    assert "§1.3" in source
+
+    write_video_profile(profile(video_id="a", fullscreen_ratio=0.9, series_id="PL_new"),
+                        tmp_path)
+    write_video_profile(profile(video_id="b", fullscreen_ratio=0.8, series_id="PL_new"),
+                        tmp_path)
+    # 別的系列不得混進來
+    write_video_profile(profile(video_id="c", fullscreen_ratio=0.1, series_id="PL_other"),
+                        tmp_path)
+
+    value, source = series_baseline(tmp_path, "PL_new")
+    assert value == pytest.approx(0.15)  # (1-0.9 + 1-0.8) / 2
+    assert "2 支" in source
 
 
 def test_speaker_ratio_within_tolerance_passes():
@@ -96,11 +149,13 @@ def test_too_many_midband_frames_is_flagged():
 
 def test_multiple_problems_are_all_reported():
     """一次列全，不要修一個才發現下一個。"""
+    # 用混合素材（0.5）而非 0.95：單一模式會跳過分離度判準，
+    # 而這一條要驗的是「多個問題會一次列全」。
     problems = check_mismatches([
-        profile(fullscreen_ratio=0.95, mode_separation=1.0,
+        profile(fullscreen_ratio=0.5, mode_separation=1.0,
                 sections_per_minute=10.0, transition_ratio=0.5)
     ])
-    assert len(problems) == 4
+    assert len(problems) == 3, problems
 
 
 # --------------------------------------------------------------------------
