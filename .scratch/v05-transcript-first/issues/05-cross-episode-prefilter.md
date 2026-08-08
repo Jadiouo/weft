@@ -43,6 +43,6 @@ R26 §4 已經量完，程式在 `experiments/r26_slide_definition/cross_episode
 
 分類準確率 0.900 → **0.925**。
 
- 九條，其中
- 是那個硬條件的自動化守門——
+`tests/test_unit_recurring.py` 九條，其中
+`test_no_real_slide_is_ever_filtered_out` 是那個硬條件的自動化守門——
 **誤殺的投影片，內容從此不存在於知識庫，而輸出上看不出少了什麼**。
