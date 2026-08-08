@@ -28,7 +28,7 @@ R26 §4 已經量完，程式在 `experiments/r26_slide_definition/cross_episode
 
 ## 完成紀錄
 
-實作在 ，掛在 S4a 的**第 0 趟**（分類之前），
+實作在 `src/weft/stages/recurring.py`，掛在 S4a 的**第 0 趟**（分類之前），
 被剔掉的不必再花一次分類呼叫。
 
 實跑四支，與 R26 的離線量測完全一致：
