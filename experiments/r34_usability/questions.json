@@ -1,0 +1,23 @@
+{
+  "_note": "票 12 的檢索評測題組。每題標出**人工判定能回答它的 chunk id**。\n判定標準：讀那個 chunk 就答得出來，不需要看別的（§3.5 的 chunk 自足要求）。\n多個 chunk 都答得出來時全部列出——檢索命中任一個都算成功。\n\n題目是**先讀 chunk 再出**的，所以它們是「這批內容答得出來的問題」，\n不是「使用者會問的所有問題」。這個偏差要記著：它量的是**檢索找不找得到**，\n不是**知識庫涵蓋得夠不夠**。後者要用另一組題（涵蓋率）才量得到。",
+  "questions": [
+    {"q": "為什麼要叫胰腺而不是胰臟？", "gold": ["cxrqHABhWOU#000#b00"]},
+    {"q": "胰腺每天製造多少胰液？", "gold": ["cxrqHABhWOU#008#b01"]},
+    {"q": "胰腺癌的患者是不是都有幽門桿菌？", "gold": ["cxrqHABhWOU#008#b00"]},
+    {"q": "胰腺聽誰的指令？", "gold": ["cxrqHABhWOU#004#b00", "cxrqHABhWOU#005#b00", "cxrqHABhWOU#006#b00"]},
+    {"q": "豐田式管理跟胰腺有什麼關係？", "gold": ["cxrqHABhWOU#003#b00", "cxrqHABhWOU#002#b00"]},
+    {"q": "胰腺對應哪幾節胸椎？", "gold": ["cxrqHABhWOU#008#b02"]},
+    {"q": "為什麼只有肝臟有兩組靜脈？", "gold": ["2FjApOVIbUs#002#b00", "2FjApOVIbUs#002#b01"]},
+    {"q": "肝臟什麼時候做盤點？", "gold": ["2FjApOVIbUs#003#b00"]},
+    {"q": "肝臟到底會不會造血？", "gold": ["2FjApOVIbUs#006#b00", "2FjApOVIbUs#005#b00"]},
+    {"q": "為什麼說肝是將軍之官？", "gold": ["2FjApOVIbUs#003#b00", "2FjApOVIbUs#004#b00", "2FjApOVIbUs#010#b00"]},
+    {"q": "腹腔積水是怎麼造成的？", "gold": ["2FjApOVIbUs#007#b02", "2FjApOVIbUs#008#b00"]},
+    {"q": "血癌的兩大原因是什麼？", "gold": ["2FjApOVIbUs#026#b00"]},
+    {"q": "為什麼兒童血癌的治癒率最高？", "gold": ["2FjApOVIbUs#027#b00", "2FjApOVIbUs#027#b01"]},
+    {"q": "養肝有什麼方法？", "gold": ["2FjApOVIbUs#017#b00"]},
+    {"q": "肝臟的神經報表送到哪一節胸椎？", "gold": ["2FjApOVIbUs#021#b00"]},
+    {"q": "肝臟除了盤點還做什麼？", "gold": ["2FjApOVIbUs#019#b00", "2FjApOVIbUs#020#b00", "2FjApOVIbUs#020#b02"]},
+    {"q": "為什麼肝病很難治？", "gold": ["2FjApOVIbUs#014#b01", "2FjApOVIbUs#015#b00", "2FjApOVIbUs#016#b00"]},
+    {"q": "拍打肚子對肝門靜脈有什麼幫助？", "gold": ["2FjApOVIbUs#008#b00", "2FjApOVIbUs#009#b00"]}
+  ]
+}
