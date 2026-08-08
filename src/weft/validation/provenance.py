@@ -148,6 +148,10 @@ class BlockVerdict:
     copy_ratio: float
     missing_entities: list[str] = field(default_factory=list)
     reason: str = ""
+    #: 未通過，但內容其實溯得到**同一段的另一個來源**（見 `_diagnose_wrong_source`）。
+    #: 這是歸屬錯誤不是幻覺，**修法完全不同**——要修的是 S4c 的 prompt，
+    #: 不是內容品質。仍然算未通過。
+    wrong_source: bool = False
 
 
 @dataclass
@@ -162,6 +166,11 @@ class VideoVerdict:
     @property
     def unverified(self) -> list[BlockVerdict]:
         return [v for v in self.verdicts if v.status is not VerificationStatus.VERIFIED]
+
+    @property
+    def wrong_source(self) -> list[BlockVerdict]:
+        """未通過、但溯得到同段另一個來源的。修的是歸屬不是內容。"""
+        return [v for v in self.verdicts if v.wrong_source]
 
     @property
     def unverified_ratio(self) -> float:
@@ -238,6 +247,38 @@ def check_block(
     )
 
 
+def _diagnose_wrong_source(ir, seg, block, transcript: str, cfg, verdict) -> None:
+    """未通過時，看看它是不是**溯得到同一段的另一個來源**，只是型別標錯。
+
+    **只改 `reason`，不改 `status`。** 這一段有兩個來源（投影片文字與逐字稿），
+    內容忠實於其中一個卻標成另一個，是**歸屬錯誤**而不是幻覺——
+    但它仍然不算通過：§3.5 要求 chunk 自足，「投影片寫了 X」與
+    「講者說了 X」在下游是兩件事，metadata 帶錯就是帶錯。
+
+    存在的理由是**這兩種要分開修**。C1 實測四支影片 27 筆未通過：
+      5 筆　來源投影片其實不是投影片（分類誤報的下游後果）
+      8 筆　內容抄自同段投影片卻標成 transcript ← 這一類
+     14 筆　兩個來源都對不上，才是真正要判「內容有沒有問題」的
+    混在一個數字裡的時候，看起來像「內容品質不到 0.95」，
+    其實有一半是別的地方壞掉。
+    """
+    if verdict.status is not VerificationStatus.UNVERIFIED:
+        return
+    if block.provenance.kind is ProvenanceKind.SLIDE_OCR:
+        other, name = transcript, "逐字稿"
+    else:
+        slide = ir.slide_by_id(seg.slide_ref) if seg.slide_ref else None
+        other, name = (slide.slide_text or "" if slide else ""), "同段的投影片文字"
+    if not other.strip():
+        return
+    sim = containment(block.text, other)
+    threshold = cfg.min_similarity_by_type.get(str(block.type), cfg.min_similarity)
+    if sim >= threshold and sim > verdict.similarity * 2:
+        verdict.reason += (f"；但它與**{name}**的相似度是 {sim:.3f}"
+                           f"——來源型別可能標錯，不是內容編造")
+        verdict.wrong_source = True
+
+
 def check_video(ir: VideoIR, cfg: ProvenanceConfig) -> VideoVerdict:
     """跑完整支影片的溯源檢查，並就地填回 block 的 verification / similarity。"""
     verdicts: list[BlockVerdict] = []
@@ -250,6 +291,7 @@ def check_video(ir: VideoIR, cfg: ProvenanceConfig) -> VideoVerdict:
         for i, block in enumerate(seg.understanding.content_blocks):
             source = resolve_source(ir, block, transcript)
             verdict = check_block(block, source, cfg, seg.segment_id, i)
+            _diagnose_wrong_source(ir, seg, block, transcript, cfg, verdict)
             block.verification = verdict.status
             block.similarity = verdict.similarity
             verdicts.append(verdict)

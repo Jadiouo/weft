@@ -200,8 +200,41 @@ def _apply_to_segment(seg, understanding, by_slide_id, transcript) -> None:
         seg.mode = SegmentMode.SPEAKER_ONLY
         seg.slide_ref = None
 
+    _canonicalize_refs(seg, understanding)
+
     if understanding.corrections and transcript is not None:
         apply_corrections(transcript, seg, understanding.corrections)
+
+
+def _canonicalize_refs(seg, understanding) -> None:
+    """把 `provenance.ref` 換成管線的權威值。
+
+    **這個欄位本來就不該由模型提供。** 一段只會拿到一張投影片的文字
+    （`slide_context` 只掛那一張），所以 `slide_ocr` 的合法來源只有一個；
+    `transcript` 的區間就是這一段自己的起訖。模型寫的是它抄下來的字串。
+
+    實測（C1，四支影片 28 筆未通過）：**3 筆是模型把 `slide_015` 寫成
+    `015`**，查不到投影片 → 來源字串為空 → source_ratio 0% → 未通過，
+    而且失敗原因顯示「來源長度僅 0%」，看起來像內容太長，其實是查無此人。
+    內容本身是忠實的。
+
+    這不是模糊比對（§5.3 不變量 10 禁止的那種）——是**改用權威值取代猜測**。
+    模型指到別張投影片時記一筆 warning：那是它搞混了，值得看。
+    """
+    from ..ir import ProvenanceKind
+
+    if understanding is None:
+        return
+    slide_id = seg.slide_ref or seg.candidate_ref
+    for i, block in enumerate(understanding.content_blocks):
+        if block.provenance.kind is ProvenanceKind.SLIDE_OCR:
+            if not slide_id or block.provenance.ref == slide_id:
+                continue
+            log.warning("%s 的 block#%d 指向 %r，改為本段的 %s",
+                        seg.segment_id, i, block.provenance.ref, slide_id)
+            block.provenance.ref = slide_id
+        else:
+            block.provenance.ref = f"{seg.t_start:.1f}s-{seg.t_end:.1f}s"
 
 
 def _index_of(work: WorkPaths, segment: Segment) -> int:
