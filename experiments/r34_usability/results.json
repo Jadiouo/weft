@@ -1,6 +1,7 @@
 {
   "chunks": 69,
   "questions": 18,
+  "embedding_model": "BAAI/bge-m3",
   "models": {
     "BAAI/bge-m3": {
       "recall@1": 0.944,
@@ -55,33 +56,25 @@
         2,
         2
       ]
-    },
-    "naive-200": {
-      "recall@1": 0.889,
-      "recall@3": 0.944,
-      "recall@5": 1.0,
-      "recall@10": 1.0,
-      "mrr": 0.919,
-      "ranks": [
-        1,
-        1,
-        3,
-        1,
-        1,
-        5,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1,
-        1
-      ]
     }
+  },
+  "control": {
+    "kind": "naive fixed-window 200 chars",
+    "chunks": 40,
+    "questions": 16,
+    "embedding_model": "BAAI/bge-m3",
+    "min_overlap_ratio": 0.5,
+    "recall@1": 0.812,
+    "recall@3": 0.938,
+    "recall@5": 0.938,
+    "recall@10": 1.0,
+    "mrr": 0.875
+  },
+  "weft_on_same_questions": {
+    "recall@1": 1.0,
+    "recall@3": 1.0,
+    "recall@5": 1.0,
+    "recall@10": 1.0,
+    "mrr": 1.0
   }
 }
