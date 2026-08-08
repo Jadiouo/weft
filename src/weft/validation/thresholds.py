@@ -26,8 +26,16 @@ BOUNDARY_F1_SYNTHETIC: Final[float] = 0.95
 #: 參考：文獻中 naive frame diff 約 0.50–0.60，好方法約 0.81+。
 BOUNDARY_F1_REAL: Final[float] = 0.75
 
-#: speaker/slide 分類 accuracy。合成與真實皆適用。硬切素材，這題應該很簡單。
-FRAME_CLASS_ACCURACY: Final[float] = 0.95
+#: 「這張候選幀是不是投影片」的分類 accuracy。
+#:
+#: **v0.4 改綁對象（D30）。** 原名 `FRAME_CLASS_ACCURACY`，量的是
+#: `FrameLabel.frame_class`——但 v0.3 的 D16 把 CV 的 speaker/slide 分類
+#: 整個移除後，那個欄位**恆為 `slide`**（實測 2519/2519），
+#: 門檻因此測不到任何東西。
+#:
+#: 分類這件事沒有消失，只是搬到 **S4a 的 `is_slide`**（§4.7a）。
+#: 門檻改綁到那裡，值不變。
+SLIDE_CLASSIFICATION_ACCURACY: Final[float] = 0.95
 
 #: 逐條動畫合併正確率（對抗樣本 A2）。這是設計目標，不容失敗。
 PROGRESSIVE_MERGE_ACCURACY: Final[float] = 1.00
@@ -67,7 +75,7 @@ COVERAGE_TOLERANCE_SEC: Final[float] = 1.0
 ACCEPTANCE_THRESHOLDS: Final[frozenset[str]] = frozenset({
     "BOUNDARY_F1_SYNTHETIC",
     "BOUNDARY_F1_REAL",
-    "FRAME_CLASS_ACCURACY",
+    "SLIDE_CLASSIFICATION_ACCURACY",
     "PROGRESSIVE_MERGE_ACCURACY",
     "TERM_CORRECTION_PRECISION",
     "TERM_CORRECTION_RECALL",

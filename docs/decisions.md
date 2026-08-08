@@ -939,3 +939,63 @@ ink 遮罩都只剩一條橫槓。
 它報的是「哪裡有問題」，你不會第一時間懷疑那個座標本身。
 中間試過兩版「保持長度／保留換行」的不變量斷言，都因為
 `splitlines()` 吃掉末行而失敗；改成不需要位移的寫法才乾淨。
+
+---
+
+## D30：門檻會「懸空」——測試全綠，但什麼都沒在管
+
+**發現方式**：準備解除 R2（黃金集）前先盤點「要標什麼」。
+第一個查的 `FRAME_CLASS_ACCURACY` 就對不上——它量
+`FrameLabel.frame_class`，而 v0.3 的 D16 移除 CV 分類後那個欄位
+**恆為 `slide`**（實測 2519/2519）。
+
+往下盤點完 10 項（`experiments/r24_threshold_audit/REPORT.md`）：
+
+| 狀態 | 數量 |
+|---|---|
+| 真的在拿實際輸出驗收 | **3** |
+| 缺標註而 skip | 1 |
+| 測的機制已不存在 | 1 |
+| **從來沒有驗收測試** | 3 |
+
+「從來沒有驗收測試」的三項，測試 body **只有一行 `pytest.skip`**——
+不是「有標註就會跑」，是根本還沒寫。
+
+### 為什麼沒被發現
+
+因為 `test_unit_metrics.py` 有這種斷言：
+
+```python
+assert T.TERM_CORRECTION_PRECISION == 0.90
+```
+
+它會綠燈，看起來像門檻有在管。但它只證明了**常數沒被改過**，
+與「有沒有拿真實輸出去比」是兩回事。
+
+`test_thresholds_are_not_configurable` 與 `ACCEPTANCE_THRESHOLDS`
+也是同樣的性質：它們防的是「有人偷偷調門檻」，
+**防不了「門檻根本沒接上」**。
+
+**§5.5 #7 只規定了不得調低門檻，沒有規定門檻必須被使用。**
+
+### 處置
+
+1. **加機械護欄** `test_every_acceptance_threshold_is_actually_enforced`：
+   每個 `ACCEPTANCE_THRESHOLDS` 成員都必須被至少一個**非常數斷言**使用。
+2. **明知故犯的清單** `DANGLING_THRESHOLDS` + 配套的
+   `test_dangling_thresholds_are_documented`——列進去必須同時在
+   `known-risks.md` 留紀錄。**是紀錄不是豁免權**，加它時測試會逼你寫文件。
+3. **`FRAME_CLASS_ACCURACY` → `SLIDE_CLASSIFICATION_ACCURACY`**，
+   改綁到 S4a 的 `is_slide`（§4.7a）。值不變，標註已存在（49 張）。
+4. 黃金集格式加 `slide_classes`（接替 `frame_classes`）與 `slide_groups`
+   （S1c 去重的 ground truth）。`GoldenAnnotation.load` 遇到不認得的欄位
+   **報錯而非忽略**——忽略會讓測試拿舊格式資料驗新機制。
+
+### 教訓
+
+**「檢查存在」與「檢查有效」是兩件事，而前者會偽裝成後者。**
+一個 skip 是誠實的（它出現在報告裡），但一個「只驗常數值」的綠燈不是——
+它主動製造了「這件事有人管」的錯覺。
+
+盤點的觸發時機也值得記：**這是在準備做另一件事（標註）時順手查出來的**。
+若不是先問「我要標什麼」，這三項可能會一直懸空下去。

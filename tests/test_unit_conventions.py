@@ -343,3 +343,67 @@ def test_acceptance_threshold_list_is_complete():
         f"未登記的門檻：{actual - processing - declared}；"
         f"登記了但不存在：{declared - actual}"
     )
+
+
+# --------------------------------------------------------------------------
+# 門檻不得懸空（R24）
+#
+# §5.5 #7 防的是「有人偷偷調門檻」，防不了「門檻根本沒接上任何驗收」。
+# 盤點（experiments/r24_threshold_audit/）發現 10 項門檻只有 3 項真的在
+# 拿實際輸出比對；其餘幾項只在 test_unit_metrics.py 有「常數值斷言」
+# （`assert T.X == 0.90`）——那條會綠燈，看起來像門檻有在管，
+# 但它只證明了常數沒被改過。
+# --------------------------------------------------------------------------
+
+#: 只驗常數值本身的斷言，例如 `assert T.BOUNDARY_F1_REAL == 0.75`。
+#: 這種斷言**不算**把門檻接上驗收。
+_CONSTANT_ASSERT = re.compile(
+    r"assert\s+\w+\.([A-Z_]+)\s*(==|is)\s*(?:[\d.]+|None|True|False)\s*(?:#.*)?$",
+    re.MULTILINE,
+)
+
+#: 已知尚未接上、且**已在文件中記錄為欠帳**的門檻。
+#: 加進這裡必須同時在 docs/known-risks.md 留下對應條目——
+#: 這個清單是「明知故犯的紀錄」，不是豁免權。
+DANGLING_THRESHOLDS: frozenset[str] = frozenset({
+    "TERM_CORRECTION_RECALL",       # 值為 None，語意是「量測但不 assert」
+    "ALIGNMENT_MEDIAN_ERROR_SEC",   # v0.3 移除語意吸附後量什麼待決，見 R24
+})
+
+
+def test_every_acceptance_threshold_is_actually_enforced():
+    """每個 §5.2 門檻都必須被至少一個**非常數斷言**使用。
+
+    「常數值斷言」不算——`assert T.X == 0.90` 只證明常數沒被改過，
+    與「有沒有拿真實輸出去比」是兩回事。
+    """
+    from weft.validation import thresholds as T
+
+    used: set[str] = set()
+    for path in collect_test_files():
+        source = _strip_literals_and_comments(path.read_text(encoding="utf-8"))
+        constant_only = {m.group(1) for m in _CONSTANT_ASSERT.finditer(source)}
+        for name in T.ACCEPTANCE_THRESHOLDS:
+            if name not in source:
+                continue
+            # 出現次數若全部來自常數斷言，就不算接上
+            occurrences = source.count(name)
+            if occurrences > (1 if name in constant_only else 0):
+                used.add(name)
+
+    dangling = set(T.ACCEPTANCE_THRESHOLDS) - used - DANGLING_THRESHOLDS
+    assert not dangling, (
+        f"這些門檻沒有被任何實際驗收使用（只有常數斷言或完全沒用到）：{sorted(dangling)}。"
+        "門檻懸空時測試會全綠，但實際上什麼都沒在管。"
+        "若確定暫時無法接上，加進 DANGLING_THRESHOLDS 並在 known-risks 留紀錄。"
+    )
+
+
+def test_dangling_thresholds_are_documented():
+    """明知故犯的清單必須在 known-risks.md 有對應紀錄。"""
+    risks = (REPO / "docs" / "known-risks.md").read_text(encoding="utf-8")
+    missing = [name for name in DANGLING_THRESHOLDS if name not in risks]
+    assert not missing, (
+        f"{missing} 列在 DANGLING_THRESHOLDS 卻沒有在 docs/known-risks.md 說明。"
+        "這個清單是紀錄，不是豁免權。"
+    )

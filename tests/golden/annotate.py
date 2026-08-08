@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 import subprocess
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 
 import cv2
@@ -55,8 +55,16 @@ class GoldenAnnotation:
     annotator: str = ""
     annotated_on: str = ""
     boundaries: list[Boundary] = field(default_factory=list)
-    #: 每個抽樣點的 speaker/slide 標註（可選，缺了就跳過分類 accuracy）
+    #: 每個抽樣點的 speaker/slide 標註。
+    #: **v0.4 已作廢**——v0.3 的 D16 移除 CV 分類後 `frame_class` 恆為
+    #: `slide`，這份標註沒有東西可以對。欄位保留只為讀得動舊檔。
     frame_classes: dict[str, str] = field(default_factory=dict)
+    #: `slide_id → 是不是投影片`。對應 **S4a 的 `is_slide`**（§4.7a）。
+    #: 這是 `frame_classes` 的接替者（D30）。
+    slide_classes: dict[str, bool] = field(default_factory=dict)
+    #: `slide_id → 代表幀的 slide_id`。同一張投影片反覆出現時的分組，
+    #: 對應 **S1c 去重**（§4.3b）。代表幀自己指向自己。
+    slide_groups: dict[str, str] = field(default_factory=dict)
     notes: str = ""
 
     @property
@@ -73,6 +81,12 @@ class GoldenAnnotation:
     def load(cls, path: Path) -> GoldenAnnotation:
         raw = json.loads(path.read_text(encoding="utf-8"))
         raw["boundaries"] = [Boundary(**b) for b in raw.get("boundaries", [])]
+        known = {f.name for f in fields(cls)}
+        unknown = set(raw) - known
+        if unknown:
+            # **不要靜靜忽略**——多出來的欄位通常代表標註格式改過而檔案沒跟上，
+            # 忽略它會讓測試拿舊格式的資料驗新機制（D22 的同類問題）。
+            raise ValueError(f"{path.name} 有不認得的欄位：{sorted(unknown)}")
         return cls(**raw)
 
 

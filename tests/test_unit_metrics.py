@@ -176,7 +176,7 @@ def test_thresholds_match_sdd_section_5_2():
     """
     assert T.BOUNDARY_F1_SYNTHETIC == 0.95
     assert T.BOUNDARY_F1_REAL == 0.75
-    assert T.FRAME_CLASS_ACCURACY == 0.95
+    assert T.SLIDE_CLASSIFICATION_ACCURACY == 0.95
     assert T.PROGRESSIVE_MERGE_ACCURACY == 1.00
     assert T.TERM_CORRECTION_PRECISION == 0.90
     assert T.TERM_CORRECTION_RECALL is None  # 記錄但不設硬門檻

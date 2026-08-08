@@ -264,28 +264,46 @@ def test_boundary_f1_on_real_videos(cfg: Config):
 
 
 @pytest.mark.golden
-def test_frame_classification_on_real_videos(cfg: Config):
-    """§5.2：speaker/slide 分類 accuracy ≥ 0.95（真實影片）。"""
-    from weft.stages.local import s1b_slides
+def test_slide_classification_on_real_videos(cfg: Config):
+    """§5.2：「這張候選幀是不是投影片」的 accuracy ≥ 0.95（真實影片）。
+
+    **v0.4 改綁對象（D30）。** 原本測 `FrameLabel.frame_class`，
+    但 v0.3 的 D16 移除 CV 分類後那個欄位恆為 `slide`——測不到東西。
+    分類搬到 S4a 的 `is_slide`，門檻跟著搬。
+
+    這一項**不需要跑模型**：S4a 的結果落地在 `04_slide_understanding/`，
+    直接讀快取與黃金集比對。沒有快取就 skip——那代表還沒跑過 S4a。
+    """
+    import json
+
+    from weft.stages.dedup import representatives
     from weft.validation.metrics import classification_accuracy
-    from weft.validation.thresholds import FRAME_CLASS_ACCURACY
+    from weft.validation.thresholds import SLIDE_CLASSIFICATION_ACCURACY
 
-    annotations = [a for a in _golden_annotations() if a.frame_classes]
+    annotations = [a for a in _golden_annotations() if a.slide_classes]
     if not annotations:
-        pytest.skip("黃金集尚未標註 frame_classes")
+        pytest.skip("黃金集尚未標註 slide_classes")
 
+    failures = []
     for annotation in annotations:
         work = WorkPaths(cfg.work_dir, annotation.video_id)
-        candidates, _ = s1b_slides(cfg, work)
-        by_time = {round(f.t, 1): str(f.frame_class) for f in candidates.frames}
-        pairs = [
-            (by_time[round(float(t), 1)], label)
-            for t, label in annotation.frame_classes.items()
-            if round(float(t), 1) in by_time
-        ]
-        assert pairs, f"{annotation.video_id}：標註的時間點與抽幀對不上"
+        if not work.slide_understanding_dir.exists():
+            pytest.skip(f"{annotation.video_id} 尚未跑過 S4a")
+
+        pairs = []
+        for slide_id, expected in annotation.slide_classes.items():
+            path = work.slide_understanding_dir / f"{slide_id}.json"
+            if not path.exists():
+                continue  # 被 S1c 合併掉的候選幀沒有自己的結果
+            got = bool(json.loads(path.read_text(encoding="utf-8")).get("is_slide"))
+            pairs.append(("slide" if got else "speaker",
+                          "slide" if expected else "speaker"))
+        assert pairs, f"{annotation.video_id}：標註的 slide_id 與 S4a 的輸出對不上"
+
         accuracy = classification_accuracy([p for p, _ in pairs], [g for _, g in pairs])
-        assert accuracy >= FRAME_CLASS_ACCURACY, f"{annotation.video_id}: {accuracy:.3f}"
+        if accuracy < SLIDE_CLASSIFICATION_ACCURACY:
+            failures.append(f"{annotation.video_id}: {accuracy:.3f}（n={len(pairs)}）")
+    assert not failures, "\n".join(failures)
 
 
 @pytest.mark.golden

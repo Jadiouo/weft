@@ -584,3 +584,44 @@ prompt 被設計成保守（「寧可漏改，不可亂改」）；而且 `七�
 **主要限制**：術語清單在無字幕影片上只能來自 `slide_text`，
 實測只涵蓋 72 個術語中的 **38 個（53%）**——投影片沒提到的術語
 （`投胎轉世`、`中陰身`、`五蘊`…）交叉檢查沒有依據。**尚未有解。**
+
+---
+
+## R19：§5.2 有三項門檻懸空——測試全綠但什麼都沒在管（2026-08-07 盤點）
+
+準備解除 R2（黃金集）前先盤點「要標什麼」，結果發現
+**10 項門檻只有 3 項真的在拿實際輸出驗收**
+（`experiments/r24_threshold_audit/REPORT.md`）。
+
+| 狀態 | 門檻 |
+|---|---|
+| ✅ 真的在跑 | 合成 boundary F1、逐條動畫合併、溯源通過率／unverified 比例 |
+| ⏸ 缺標註 | 真實 boundary F1 |
+| ❌ 機制已不存在 | speaker/slide 分類 accuracy |
+| ❌ 從來沒有驗收測試 | 術語校正 precision／recall、對齊誤差 |
+
+**最後三項的測試 body 只有一行 `pytest.skip`**——不是「有標註就會跑」，
+是根本還沒寫。而 `test_unit_metrics.py` 裡有
+`assert T.TERM_CORRECTION_PRECISION == 0.90` 這種**常數值斷言**，
+它會綠燈、看起來像門檻有在管，但只證明了常數沒被改過。
+
+**§5.5 #7 防的是「有人偷偷調門檻」，沒有規定防「門檻根本沒接上」。**
+已加機械護欄 `test_every_acceptance_threshold_is_actually_enforced`。
+
+### 仍然懸空的兩項（列在 `DANGLING_THRESHOLDS`）
+
+**`TERM_CORRECTION_RECALL`**：值為 `None`，語意是「必須量測並寫入報告，
+但不 assert」。**實際上從來沒有任何地方量測它並寫入報告。**
+R13 §「未量」明白記過「recall 從未量測」，至今仍是。
+要解除需要黃金集標註「逐字稿中所有應該被改的術語錯誤」。
+
+**`ALIGNMENT_MEDIAN_ERROR_SEC`**：v0.3 移除語意吸附（R10）後，
+S3 只做粗切、`boundary_shift_sec` 恆為 0——**沒有「吸附」可言，
+這個門檻量的是什麼需要重新定義**。在定義清楚之前不接上，
+接上一個定義不明的東西比空著更糟。
+
+### 已處置的一項
+
+**`FRAME_CLASS_ACCURACY`** 測的 `frame_class` 在 v0.3 用 D16 移除 CV
+分類後全部是 `slide`（實測 2519/2519）。分類這件事沒有消失，
+只是搬到 S4a 的 `is_slide`（§4.7a）——門檻已改綁到那裡，見 D30。
