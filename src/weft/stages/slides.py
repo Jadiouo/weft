@@ -257,6 +257,18 @@ def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
             log.info("S4a %s：%s 判定不是投影片（%s）", work.video_id, slide.slide_id,
                      payload.get("reject_reason") or "未說明")
 
+    # **全軍覆沒時大聲失敗，不要靜靜產出空的。**
+    # 實測：ollama 服務沒開時 19 張全部連線失敗，每一張都「留空並繼續」，
+    # 管線照樣往下走並產出一份沒有任何投影片文字的知識庫——
+    # 那是環境壞了，不是「這支影片沒有投影片」。與 D22 的 rehydrate 同一類。
+    attempted = stats["representatives"] - stats["cached"]
+    if attempted and stats["failed"] == attempted:
+        raise RuntimeError(
+            f"S4a {work.video_id}：{attempted} 張代表幀**全部失敗**。"
+            f"這通常是環境問題（模型服務沒開、模型名打錯、VRAM 不足），"
+            f"不是素材問題。已中止，不產出空的投影片文字。"
+        )
+
     # 被合併的候選幀沿用代表幀的結果——同一張投影片本來就該有同一份文字
     _propagate(slides)
 

@@ -84,19 +84,28 @@ def test_duplicates_inherit_the_representative_text(work, monkeypatch):
 
 
 def test_failure_leaves_the_slide_empty_not_partial(work, monkeypatch):
-    """§4.7a：仍失敗則該張留空並記錄，**不得以部分輸出充數**。"""
-    def boom(spec, image):
-        raise RuntimeError("ollama 回傳空內容")
+    """§4.7a：仍失敗則該張留空並記錄，**不得以部分輸出充數**。
 
-    monkeypatch.setattr("weft.stages.slides.understand_slide", boom)
-    slides = [_slide("slide_001")]
+    第二張是成功的——否則會觸發「全軍覆沒即中止」那道，
+    測不到本條想測的「單張失敗留空」。
+    """
+    def flaky(spec, image):
+        if image == b"boom":
+            raise RuntimeError("ollama 回傳空內容")
+        return {"is_slide": True, "reject_reason": "", "slide_text": "經文",
+                "description": "版面", "model_used": spec, "_tokens": (0, 0)}
+
+    monkeypatch.setattr("weft.stages.slides.understand_slide", flaky)
+    (work.dir / "03_slides" / "slide_001.png").write_bytes(b"boom")
+    slides = [_slide("slide_001"), _slide("slide_002")]
     cfg = Config()
     cfg.s4a.max_retries = 0
     cfg.s4a.retry_backoff_sec = 0.0
     stats = s4a_understand_slides(cfg, work, slides)
 
     assert stats["failed"] == 1
-    assert slides[0].slide_text is None
+    assert slides[0].slide_text is None, "失敗的那張不得留下半套輸出"
+    assert slides[1].slide_text == "經文"
 
 
 def test_cache_is_keyed_by_model_and_prompt_version(work, monkeypatch):
@@ -147,3 +156,41 @@ def test_missing_cache_is_detected_not_silently_empty(tmp_path, monkeypatch):
 
     assert rehydrate(Config(), work, slides) == 0, "沒有快取就該回報 0，讓呼叫端察覺"
     assert all(s.slide_text is None for s in slides)
+
+
+def test_total_failure_aborts_instead_of_producing_empty(work, monkeypatch):
+    """全軍覆沒時要大聲失敗。
+
+    實測：ollama 服務沒開時 19 張代表幀全部連線失敗，每一張都
+    「留空並繼續」，管線照樣產出一份沒有任何投影片文字的知識庫。
+    **那是環境壞了，不是「這支影片沒有投影片」**——與 D22 的 rehydrate 同一類。
+    """
+    monkeypatch.setattr("weft.stages.slides.understand_slide",
+                        lambda spec, image: (_ for _ in ()).throw(
+                            RuntimeError("Connection refused")))
+    cfg = Config()
+    cfg.s4a.max_retries = 0
+    cfg.s4a.retry_backoff_sec = 0.0
+    slides = [_slide("slide_001"), _slide("slide_002")]
+
+    with pytest.raises(RuntimeError, match="全部失敗"):
+        s4a_understand_slides(cfg, work, slides)
+
+
+def test_partial_failure_still_continues(work, monkeypatch):
+    """只有部分失敗時照舊繼續——那可能真的是某張圖的問題。"""
+    calls = {"n": 0}
+
+    def flaky(spec, image):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("這張壞掉")
+        return {"is_slide": True, "reject_reason": "", "slide_text": "經文",
+                "description": "版面", "model_used": spec, "_tokens": (0, 0)}
+
+    monkeypatch.setattr("weft.stages.slides.understand_slide", flaky)
+    cfg = Config()
+    cfg.s4a.max_retries = 0
+    cfg.s4a.retry_backoff_sec = 0.0
+    stats = s4a_understand_slides(cfg, work, [_slide("slide_001"), _slide("slide_002")])
+    assert stats["failed"] == 1 and stats["done"] == 1

@@ -246,9 +246,13 @@ def test_boundary_f1_on_real_videos(cfg: Config):
     from weft.validation.metrics import boundary_prf
     from weft.validation.thresholds import BOUNDARY_F1_REAL
 
-    annotations = _golden_annotations()
+    # **只取有標換頁點的**。標註檔存在但 boundaries 為空時，
+    # 若照算會得到 F1=0.000（TP=0 FP=49 FN=0）——那是「還沒標」不是
+    # 「偵測全錯」。無意義的紅燈與無意義的綠燈一樣糟：兩者都讓
+    # 測試結果失去資訊。
+    annotations = [a for a in _golden_annotations() if a.confirmed]
     if not annotations:
-        pytest.skip("尚無經人工確認的黃金集標註（見 tests/golden/annotate.py）")
+        pytest.skip("黃金集尚未標註換頁時間點（見 tests/golden/annotate.py）")
 
     failures = []
     for annotation in annotations:
@@ -284,11 +288,15 @@ def test_slide_classification_on_real_videos(cfg: Config):
     if not annotations:
         pytest.skip("黃金集尚未標註 slide_classes")
 
+    # **缺 S4a 產物的影片個別跳過，不要中止整個測試。**
+    # 原本是 `pytest.skip(...)`——那會讓「新增一支還沒跑過的影片」
+    # 把其他影片的紅燈變成 skip，等於加一支就把問題藏起來。
     failures = []
+    evaluated = []
     for annotation in annotations:
         work = WorkPaths(cfg.work_dir, annotation.video_id)
         if not work.slide_understanding_dir.exists():
-            pytest.skip(f"{annotation.video_id} 尚未跑過 S4a")
+            continue
 
         pairs = []
         for slide_id, expected in annotation.slide_classes.items():
@@ -299,11 +307,17 @@ def test_slide_classification_on_real_videos(cfg: Config):
             pairs.append(("slide" if got else "speaker",
                           "slide" if expected else "speaker"))
         assert pairs, f"{annotation.video_id}：標註的 slide_id 與 S4a 的輸出對不上"
+        evaluated.append(annotation.video_id)
 
         accuracy = classification_accuracy([p for p, _ in pairs], [g for _, g in pairs])
         if accuracy < SLIDE_CLASSIFICATION_ACCURACY:
             failures.append(f"{annotation.video_id}: {accuracy:.3f}（n={len(pairs)}）")
-    assert not failures, "\n".join(failures)
+
+    if not evaluated:
+        pytest.skip("黃金集中沒有任何影片跑過 S4a")
+    assert not failures, (
+        f"（已評估 {len(evaluated)}/{len(annotations)} 支）\n" + "\n".join(failures)
+    )
 
 
 @pytest.mark.golden
