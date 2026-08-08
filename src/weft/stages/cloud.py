@@ -393,11 +393,14 @@ def s6_render(cfg: Config, ir: VideoIR, work: WorkPaths, out: OutPaths) -> list[
     但每個切片都要複製完整 metadata。
     """
     from ..validation.provenance import check_video
+    from ..validation.thresholds import MAX_UNVERIFIED_RATIO, PROVENANCE_PER_VIDEO_GATE
     from .render import (
         build_chunks,
         drop_video_from_chunks,
+        overall_provenance_rate,
         write_chunks,
         write_debug_markdown,
+        write_provenance_record,
         write_unverified,
     )
 
@@ -407,6 +410,9 @@ def s6_render(cfg: Config, ir: VideoIR, work: WorkPaths, out: OutPaths) -> list[
     # verification 與 similarity，也決定整支影片是否 needs_review。
     verdict = check_video(ir, cfg.provenance)
     write_unverified(verdict, out.unverified)
+    # **逐支記錄，不設門檻**（票 03）。閘門是下面那個 per-video 的判斷；
+    # 這裡只是把數字與成因留下來，讓「整體趨勢」有東西可看。
+    write_provenance_record(verdict, out.provenance_log)
 
     chunks, warnings = build_chunks(ir, cfg.s6)
     for warning in warnings:
@@ -417,8 +423,6 @@ def s6_render(cfg: Config, ir: VideoIR, work: WorkPaths, out: OutPaths) -> list[
 
     if ir.needs_review:
         # §5.4：unverified 比例 > 5% → 整支標記 needs_review，**不進 chunks.jsonl**
-        from ..validation.thresholds import MAX_UNVERIFIED_RATIO
-
         log.error(
             "S6 %s：溯源未通過比例 %.1f%%（上限 %.0f%%），整支標記 needs_review，"
             "不寫入 chunks.jsonl。請查看 %s",
@@ -432,6 +436,10 @@ def s6_render(cfg: Config, ir: VideoIR, work: WorkPaths, out: OutPaths) -> list[
         return []
 
     written = write_chunks(chunks, out.chunks, video_id=ir.meta.video_id)
-    log.info("S6 %s：寫出 %d 個 chunk（溯源通過率 %.1f%%）",
-             work.video_id, written, verdict.pass_rate * 100)
+    overall = overall_provenance_rate(out.provenance_log)
+    log.info("S6 %s：寫出 %d 個 chunk（本支溯源 %.1f%%，閘門 %.0f%%）；"
+             "累計 %d 支、整體 %.1f%%（**只是趨勢，不是驗收門檻**）",
+             work.video_id, written, verdict.pass_rate * 100,
+             PROVENANCE_PER_VIDEO_GATE * 100, overall["videos"],
+             overall["provenance_rate_overall"] * 100)
     return chunks

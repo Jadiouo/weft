@@ -337,7 +337,11 @@ def test_acceptance_threshold_list_is_complete():
     import weft.validation.thresholds as T
 
     declared = set(T.ACCEPTANCE_THRESHOLDS)
-    processing = {"MAX_CHUNK_CHARS", "COVERAGE_TOLERANCE_SEC", "ACCEPTANCE_THRESHOLDS"}
+    processing = {"MAX_CHUNK_CHARS", "COVERAGE_TOLERANCE_SEC",
+                  "ACCEPTANCE_THRESHOLDS",
+                  # 只記錄不設門檻的量測項（票 03）。它們不是驗收門檻，
+                  # 但也不是處理參數——列在這裡是為了讓下面的差集算得對。
+                  "OBSERVED_ONLY"}
     actual = {n for n in dir(T) if n.isupper() and not n.startswith("_")}
     assert actual - processing == declared, (
         f"未登記的門檻：{actual - processing - declared}；"

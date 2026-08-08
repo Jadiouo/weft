@@ -23,7 +23,7 @@ from weft.validation.thresholds import (
     BOUNDARY_F1_SYNTHETIC,
     BOUNDARY_TOLERANCE_SEC,
     PROGRESSIVE_MERGE_ACCURACY,
-    PROVENANCE_PASS_RATE,
+    PROVENANCE_PER_VIDEO_GATE,
 )
 
 pytestmark = pytest.mark.e2e
@@ -411,7 +411,7 @@ def test_single_video_end_to_end_produces_ir(cfg: Config, tmp_path):
     inv.assert_all(ir, transcript, work.dir)
 
     # §5.4：溯源通過率
-    assert check_video(ir, cfg.provenance).pass_rate >= PROVENANCE_PASS_RATE
+    assert check_video(ir, cfg.provenance).pass_rate >= PROVENANCE_PER_VIDEO_GATE
 
 
 @pytest.mark.quota

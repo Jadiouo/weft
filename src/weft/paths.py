@@ -121,6 +121,15 @@ class OutPaths:
     def skip_list(self) -> Path:
         return self.root / "skiplist.json"
 
+    @property
+    def provenance_log(self) -> Path:
+        """逐支影片的溯源量測，**只記錄不設門檻**（票 03）。
+
+        跨影片的合計數字不是驗收依據——R27 證明它混了四種成因。
+        留著它是為了看**趨勢**：改了東西之後整體往上還是往下。
+        """
+        return self.root / "provenance.jsonl"
+
     def ensure_dirs(self) -> None:
         for d in (self.root, self.debug_dir):
             d.mkdir(parents=True, exist_ok=True)

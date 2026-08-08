@@ -45,8 +45,14 @@
 SDD §5.2 自己對 `slide_text` 的 CER 寫過「**不憑感覺訂一個數字**」——
 這條紀律沒有被套用在 0.95 上。
 
-**處置**：見 SPEC v0.5 的 D-F。拆成
-`PROVENANCE_PER_VIDEO_GATE`（真的擋）與 `provenance_rate_overall`（只記錄）。
+**處置**：**已落地**（票 03）。拆成
+`PROVENANCE_PER_VIDEO_GATE = 0.95`（真的擋，值未動）與
+`provenance_rate_overall`（只記錄，列在 `thresholds.OBSERVED_ONLY`，
+規約測試會擋它被誤登記成驗收門檻）。
+
+逐支的量測**帶成因分解**寫進 `out/provenance.jsonl`：
+`wrong_source`／`depends_on_correction`／`unresolved`。
+只給一個比率等於沒說——R27 的 27 筆未通過裡，17 筆的病根不在內容品質。
 
 **恢復觸發條件**：當有了「產出好不好用」的評測（SPEC D-J），
 若實測顯示某個溯源水準以下可用性明顯下降，**用那個實測值**訂門檻。

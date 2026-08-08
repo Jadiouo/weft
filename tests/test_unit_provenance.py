@@ -253,11 +253,11 @@ def test_check_video_writes_verdict_back_into_blocks():
 
 
 def test_pass_rate_meets_threshold_definition():
-    from weft.validation.thresholds import PROVENANCE_PASS_RATE
+    from weft.validation.thresholds import PROVENANCE_PER_VIDEO_GATE
 
     good = ("白話解說", "一月為胞是說精血凝聚成形，二月為胎則形兆已成胚。")
     ir = _make_ir([good] * 20)
-    assert p.check_video(ir, cfg()).pass_rate >= PROVENANCE_PASS_RATE
+    assert p.check_video(ir, cfg()).pass_rate >= PROVENANCE_PER_VIDEO_GATE
 
 
 # --------------------------------------------------------------------------

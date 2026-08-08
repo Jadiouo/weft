@@ -204,6 +204,65 @@ def _lines_excluding_videos(path: Path, video_ids: set[str]) -> list[str]:
     return kept
 
 
+def write_provenance_record(verdict, path: Path) -> dict:
+    """把一支影片的溯源量測寫進 `out/provenance.jsonl`。**沒有門檻。**
+
+    §5.4 定義的閘門是 per-video 的；§5.2 的表格卻把同一個 0.95 寫成
+    「對象：全部」的全域驗收門檻。同一個數字承載兩種語意，於是 R27 算出來
+    的「四支合計 0.838」被當成驗收依據——而那個數字混了四種成因
+    （歸屬標錯、分類誤報的下游、只靠校正才對得上、真的溯不到）。
+
+    這個檔案記的是**成因分解後**的數字。要看整體趨勢就把各支加總，
+    但那個和**不是**驗收指標，`OBSERVED_ONLY` 明文寫著。
+    """
+    import json
+
+    record = {
+        "video_id": verdict.video_id,
+        "blocks": verdict.total,
+        "verified": verdict.total - len(verdict.unverified),
+        "pass_rate": round(verdict.pass_rate, 4),
+        "needs_review": verdict.needs_review,
+        # 成因分解。**只給一個比率等於沒說**——三種成因的修法完全不同。
+        "wrong_source": len(verdict.wrong_source),
+        "depends_on_correction": len(verdict.depends_on_correction),
+        "unresolved": len([
+            v for v in verdict.unverified
+            if not v.wrong_source and not v.depends_on_correction
+        ]),
+    }
+    _rewrite_excluding(path, {verdict.video_id},
+                       [json.dumps(record, ensure_ascii=False)])
+    return record
+
+
+def overall_provenance_rate(path: Path) -> dict:
+    """把 `provenance.jsonl` 彙總成整體趨勢。**只記錄，不是驗收門檻。**"""
+    import json
+
+    rows = []
+    for line in _lines_excluding_videos(path, set()):
+        try:
+            parsed = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict) and "blocks" in parsed:
+            rows.append(parsed)
+    blocks = sum(r["blocks"] for r in rows)
+    verified = sum(r["verified"] for r in rows)
+    return {
+        "videos": len(rows),
+        "blocks": blocks,
+        "verified": verified,
+        # 這個比率**沒有門檻**。它回答「趨勢往哪走」，不回答「過了沒」。
+        "provenance_rate_overall": round(verified / blocks, 4) if blocks else 0.0,
+        "gated_out": sum(1 for r in rows if r["needs_review"]),
+        "wrong_source": sum(r["wrong_source"] for r in rows),
+        "depends_on_correction": sum(r["depends_on_correction"] for r in rows),
+        "unresolved": sum(r["unresolved"] for r in rows),
+    }
+
+
 def write_debug_markdown(ir, work, path: Path) -> Path:
     """人工抽檢用（§5.6）。含內嵌圖片與可點的時間戳連結。
 

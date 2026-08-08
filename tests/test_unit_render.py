@@ -504,3 +504,102 @@ def test_rewrite_is_atomic(legal_ir, tmp_path, out_paths, monkeypatch):
         render.drop_video_from_chunks(out.chunks, "keep")
 
     assert out.chunks.read_text(encoding="utf-8") == original
+
+
+# --------------------------------------------------------------------------
+# 票 03：per-video 閘門 vs 全域只記錄
+# --------------------------------------------------------------------------
+
+
+def _verdict(video_id: str, total: int, unverified: int, *, wrong=0, dep=0):
+    from weft.ir import VerificationStatus
+    from weft.validation.provenance import BlockVerdict, VideoVerdict
+
+    rows = []
+    for i in range(total):
+        bad = i < unverified
+        rows.append(BlockVerdict(
+            segment_id=f"{video_id}#{i:03d}", block_index=0, content_type="白話解說",
+            status=VerificationStatus.UNVERIFIED if bad else VerificationStatus.VERIFIED,
+            similarity=0.1 if bad else 0.9, copy_ratio=0.1,
+            wrong_source=bad and i < wrong,
+            depends_on_correction=bad and wrong <= i < wrong + dep,
+        ))
+    return VideoVerdict(video_id=video_id, verdicts=rows)
+
+
+def test_provenance_record_breaks_down_by_cause(tmp_path):
+    """逐支記錄要帶**成因分解**，只給一個比率等於沒說。
+
+    R27：27 筆未通過裡 17 筆的病根不在內容品質。三種成因的修法完全不同，
+    合成一個數字之後就指不出該修哪裡。
+    """
+    from weft.stages.render import write_provenance_record
+
+    path = tmp_path / "provenance.jsonl"
+    record = write_provenance_record(_verdict("v1", 10, 4, wrong=2, dep=1), path)
+
+    assert record["blocks"] == 10
+    assert record["verified"] == 6
+    assert record["wrong_source"] == 2
+    assert record["depends_on_correction"] == 1
+    assert record["unresolved"] == 1
+    assert record["wrong_source"] + record["depends_on_correction"] + record["unresolved"] == 4
+
+
+def test_provenance_record_replaces_same_video(tmp_path):
+    """重跑同一支要取代，不是累積——否則趨勢會被自己的歷史污染。"""
+    import json
+
+    from weft.stages.render import write_provenance_record
+
+    path = tmp_path / "provenance.jsonl"
+    write_provenance_record(_verdict("v1", 10, 5), path)
+    write_provenance_record(_verdict("v2", 10, 0), path)
+    write_provenance_record(_verdict("v1", 10, 0), path)
+
+    rows = [json.loads(x) for x in path.read_text(encoding="utf-8").splitlines() if x.strip()]
+    assert sorted(r["video_id"] for r in rows) == ["v1", "v2"]
+    assert {r["video_id"]: r["verified"] for r in rows} == {"v1": 10, "v2": 10}
+
+
+def test_overall_rate_is_recorded_not_gated(tmp_path):
+    """全域比率是**趨勢**，不是驗收——它不得出現在 ACCEPTANCE_THRESHOLDS。
+
+    §5.2 原本把 per-video 閘門寫成「對象：全部」的全域門檻，於是四支合計
+    的 0.838 被當成驗收依據。那個數字混了四種成因，本來就不該有門檻。
+    """
+    import weft.validation.thresholds as T
+    from weft.stages.render import overall_provenance_rate, write_provenance_record
+
+    path = tmp_path / "provenance.jsonl"
+    write_provenance_record(_verdict("v1", 10, 5), path)
+    write_provenance_record(_verdict("v2", 10, 1), path)
+
+    overall = overall_provenance_rate(path)
+    assert overall["videos"] == 2
+    assert overall["blocks"] == 20
+    assert overall["provenance_rate_overall"] == 0.7
+
+    assert "provenance_rate_overall" in T.OBSERVED_ONLY
+    assert "provenance_rate_overall" not in T.ACCEPTANCE_THRESHOLDS
+    assert not any("OVERALL" in n for n in T.ACCEPTANCE_THRESHOLDS), (
+        "全域比率不得成為驗收門檻"
+    )
+
+
+def test_gate_is_per_video_not_overall(tmp_path):
+    """一支很差不得拖垮另一支，反之亦然。
+
+    這正是把兩種語意合成一個數字時會發生的事：合計 0.70 看起來「沒過」，
+    但實際上 v2 是乾淨的、只有 v1 該被擋。
+    """
+    from weft.stages.render import overall_provenance_rate, write_provenance_record
+
+    path = tmp_path / "provenance.jsonl"
+    bad = write_provenance_record(_verdict("v1", 10, 5), path)
+    good = write_provenance_record(_verdict("v2", 10, 0), path)
+
+    assert bad["needs_review"] is True
+    assert good["needs_review"] is False
+    assert overall_provenance_rate(path)["gated_out"] == 1

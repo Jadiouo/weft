@@ -181,7 +181,7 @@ def test_thresholds_match_sdd_section_5_2():
     assert T.TERM_CORRECTION_PRECISION == 0.90
     assert T.TERM_CORRECTION_RECALL is None  # 記錄但不設硬門檻
     assert T.ALIGNMENT_MEDIAN_ERROR_SEC == 5.0
-    assert T.PROVENANCE_PASS_RATE == 0.95
+    assert T.PROVENANCE_PER_VIDEO_GATE == 0.95
     assert T.MAX_UNVERIFIED_RATIO == 0.05
 
 
