@@ -169,3 +169,134 @@ def test_no_module_reaches_the_network_at_import_time():
         except Exception as exc:  # noqa: BLE001
             failed.append(f"{mod.name}: {exc}")
     assert not failed, "\n".join(failed)
+
+
+# --------------------------------------------------------------------------
+# 票 09：完全沒有投影片時，管線照樣跑得完
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture
+def no_slides_run(tmp_path: Path):
+    """一支**完全沒有投影片**的影片：純逐字稿主幹。
+
+    對應訪談與口播素材。v0.5 之前這種影片架構上跑不了——分段的依據是
+    投影片切換，沒有投影片就沒有東西可以驅動分段。
+    """
+    from weft.ir import (
+        BoundaryMethod,
+        ContentBlock,
+        ContentType,
+        Provenance,
+        ProvenanceKind,
+        Segment,
+        SegmentMode,
+        Understanding,
+        VideoIR,
+        VideoMeta,
+    )
+
+    from tests.factories import make_transcript
+
+    cfg = Config()
+    cfg.work_dir = tmp_path / "work"
+    cfg.out_dir = tmp_path / "out"
+
+    transcript = make_transcript()
+    text = "".join(c.text_raw for c in transcript.cues)
+    seg = Segment(
+        segment_id="NOSLIDE#000", video_id="NOSLIDE", t_start=0.0, t_end=90.0,
+        mode=SegmentMode.TRANSCRIPT_ONLY, boundary_method=BoundaryMethod.TOPIC_SHIFT,
+        cue_indices=[c.index for c in transcript.cues],
+        transcript_raw=text, transcript_corrected=text,
+        understanding=Understanding(
+            is_slide=False, summary="訪談片段的摘要。",
+            content_blocks=[ContentBlock(
+                type=ContentType.ORAL,
+                text="講者以簽約作比喻，說明識蘊進入的時機。",
+                provenance=Provenance(kind=ProvenanceKind.TRANSCRIPT, ref="0.0s-90.0s"),
+            )],
+        ),
+    )
+    ir = VideoIR(
+        meta=VideoMeta(video_id="NOSLIDE", title="訪談", duration=90.0,
+                       url="https://example.invalid/NOSLIDE"),
+        slides=[],  # ← 這裡是重點
+        segments=[seg],
+    )
+    work = WorkPaths(cfg.work_dir, "NOSLIDE")
+    work.ensure_dirs()
+    out = OutPaths(cfg.out_dir)
+    out.ensure_dirs()
+    return cfg, ir, transcript, work, out
+
+
+def test_pipeline_completes_without_any_slides(no_slides_run):
+    """沒有投影片時 S6 照樣產出 chunk，不報錯、不中止。"""
+    from weft.stages.cloud import s6_render
+
+    cfg, ir, _t, work, out = no_slides_run
+    chunks = s6_render(cfg, ir, work, out)
+    assert chunks, "無投影片的影片一個 chunk 都沒產出"
+    assert out.chunks.exists()
+
+
+def test_no_slide_ocr_provenance_without_slides(no_slides_run):
+    """沒有投影片時不得出現 `slide_ocr` 型的來源——那會是憑空的出處。"""
+    from weft.ir import ProvenanceKind
+    from weft.stages.cloud import s6_render
+
+    cfg, ir, _t, work, out = no_slides_run
+    chunks = s6_render(cfg, ir, work, out)
+    kinds = {c.metadata.provenance_kind for c in chunks}
+    assert ProvenanceKind.SLIDE_OCR not in kinds
+    assert all(c.metadata.slide_ref is None for c in chunks)
+
+
+def test_all_invariants_hold_without_slides(no_slides_run):
+    """§5.3 的十條不變量在無投影片路徑上全數通過。
+
+    第 4、5 條是對 slide 的斷言——它們必須在沒有 slide 時**自然成立**，
+    而不是靠呼叫端記得跳過。
+    """
+    from weft.stages.cloud import s6_render
+
+    cfg, ir, transcript, work, out = no_slides_run
+    chunks = s6_render(cfg, ir, work, out)
+    violations = inv.check_all(ir, transcript, work.dir, chunks=chunks)
+    assert violations == [], "\n".join(str(v) for v in violations)
+
+
+def test_segmentation_works_on_transcript_alone(no_slides_run):
+    """分段完全不需要畫面——這正是 v0.5 讓無投影片素材可行的原因。"""
+    from weft.stages.align import topic_windows
+    from weft.stages.segment import topic_boundaries
+
+    _cfg, _ir, transcript, _work, _out = no_slides_run
+    cuts = topic_boundaries(transcript.cues, block_chars=20, window=2)
+    windows = topic_windows(cuts, duration=90.0, candidates=[])
+    assert windows
+    assert all(w.slide_id is None for w in windows)
+    assert windows[0].t_start == 0.0 and windows[-1].t_end == 90.0
+
+
+def test_slide_stages_are_noops_without_slides(tmp_path):
+    """零投影片時 S4a／S4b **靜靜地什麼都不做**，不報錯也不做白工。
+
+    這一條看起來多餘，但它守的是「可選路徑真的可選」——只要哪一天有人
+    在那些函式裡加了 `slides[0]` 或 `assert slides`，無投影片的素材就會
+    在跑到一半的時候炸掉，而那時已經花掉了下載與抽幀的時間。
+    """
+    from weft.stages.lexicon import apply_to_video, build_lexicon
+    from weft.stages.slides import s4a_understand_slides
+
+    cfg = Config()
+    work = WorkPaths(tmp_path, "NOSLIDE")
+    work.ensure_dirs()
+
+    stats = s4a_understand_slides(cfg, work, [])
+    assert stats["representatives"] == 0
+    assert stats["failed"] == 0
+
+    assert build_lexicon([]) == set()
+    assert apply_to_video([], [], None, cfg.s4b) == 0
