@@ -59,6 +59,10 @@ s4a:
   prompt_version: v5
   max_retries: 2
   retry_backoff_sec: 4.0
+  # 跨集重現前濾（R26）：在別集也一樣出現過的畫面直接判為節目包裝。
+  # 零誤殺，但需要同系列其他集也處理過；參考集不足時會明說並跳過。
+  cross_episode_filter: true
+  cross_episode_mae: 6.0
 
 # S4c 逐段理解（§4.7c）。
 s4:

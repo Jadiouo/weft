@@ -66,6 +66,21 @@ class GoldenAnnotation:
     #: `slide_id → 代表幀的 slide_id`。同一張投影片反覆出現時的分組，
     #: 對應 **S1c 去重**（§4.3b）。代表幀自己指向自己。
     slide_groups: dict[str, str] = field(default_factory=dict)
+    #: **課程本體的起訖秒數**（使用者決定，2026-08-08）。
+    #: `None` 表示還沒標。
+    #:
+    #: 片頭與片尾**不與中間的課程混在一起算**。理由是實測：
+    #: cxrqHABhWOU 的換頁 F1 是 0.645（門檻 0.75），但**漏抓 0**——
+    #: S1b 找到了每一個標註的換頁，11 個誤報**全部**在片頭（2–57 秒）
+    #: 與片尾（936–949 秒）。那些地方確實有畫面切換（太極動畫換成 logo、
+    #: 講堂換成訂閱畫面），S1b 找到它們是**對的**，那本來就是它的工作；
+    #: 「這些不是投影片」是 S4a 的責任。
+    #: 混在一起算，等於用課程外的雜訊懲罰 S1b 在課程內的正確行為。
+    #:
+    #: 兩段分開量：課程本體受 §5.2 的門檻約束；片頭片尾另外記錄，
+    #: 只當觀察值，不設門檻——那一段要抓什麼還沒定義清楚。
+    body_start: float | None = None
+    body_end: float | None = None
     #: **保留集**：這一支不得用來調 prompt 或調參數，只用來量測。
     #:
     #: 存在的理由是實測。「看得到講者 → 不是投影片」這條規則在三支
@@ -79,6 +94,22 @@ class GoldenAnnotation:
     @property
     def confirmed(self) -> list[float]:
         return sorted(b.t for b in self.boundaries if b.status == "confirmed")
+
+    @property
+    def body_confirmed(self) -> list[float]:
+        """課程本體內的換頁。沒標 body 範圍時退回全部——**並且要讓呼叫端
+        知道**，所以 `has_body` 是分開的一個屬性，不要用「是否等於 confirmed」
+        去猜。"""
+        if not self.has_body:
+            return self.confirmed
+        return [t for t in self.confirmed if self.body_start <= t <= self.body_end]
+
+    @property
+    def has_body(self) -> bool:
+        return self.body_start is not None and self.body_end is not None
+
+    def in_body(self, t: float) -> bool:
+        return not self.has_body or self.body_start <= t <= self.body_end
 
     def save(self, path: Path) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)

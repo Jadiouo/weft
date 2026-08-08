@@ -275,6 +275,13 @@ def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
         else:
             todo.append(slide)
 
+    # ---- 第 0 趟：跨集重現前濾（R26）--------------------------------
+    # 在別集也一模一樣出現過的畫面，不必問模型就知道是節目包裝。
+    # **零誤殺**（實測四集 26 張投影片一張都沒被砍），所以放在最前面：
+    # 被它剔掉的不必再花一次分類呼叫。
+    if p.cross_episode_filter:
+        todo = _cross_episode_filter(cfg, work, todo, stats)
+
     # ---- 第 1 趟：分類（只在分類另用模型時）--------------------------
     verdicts: dict[str, dict] = {}
     if p.classifier_model and p.classifier_model != p.model:
@@ -364,6 +371,60 @@ def s4a_understand_slides(cfg, work, slides: list[Slide], on_call=None) -> dict:
              work.video_id, stats["representatives"], stats["cached"],
              stats["failed"], stats["is_slide"])
     return stats
+
+
+def _cross_episode_filter(cfg, work, todo: list[Slide], stats: dict) -> list[Slide]:
+    """剔除在別集也一模一樣出現過的畫面。回傳還需要問模型的那些。
+
+    **參考集不足時明說並跳過，不靜默降級**（§5.5 #6 的精神）——
+    這一步依賴「同系列其他集也處理過」，而那個前提不見得成立。
+    """
+    from .recurring import (
+        MIN_REFERENCE_VIDEOS,
+        count_reference_videos,
+        recurring_slide_ids,
+        reference_frames,
+    )
+
+    p = cfg.s4a
+    work_dir = work.dir.parent
+    n_ref = count_reference_videos(work_dir, work.video_id)
+    if n_ref < MIN_REFERENCE_VIDEOS:
+        log.warning(
+            "S4a %s：跨集前濾已開啟，但只找到 %d 支參考影片（至少要 %d 支），"
+            "**本次跳過**。片頭片尾類的誤報會回到模型身上（R26）。",
+            work.video_id, n_ref, MIN_REFERENCE_VIDEOS)
+        stats["cross_episode"] = "skipped:參考集不足"
+        return todo
+
+    refs = reference_frames(work_dir, work.video_id)
+    hits = recurring_slide_ids(work, todo, p.cross_episode_mae, refs)
+    stats["cross_episode"] = len(hits)
+    if not hits:
+        log.info("S4a %s：跨集前濾（%d 支參考、%d 張代表幀）沒有剔除任何畫面",
+                 work.video_id, n_ref, len(refs))
+        return todo
+
+    remaining = []
+    for slide in todo:
+        mae = hits.get(slide.slide_id)
+        if mae is None:
+            remaining.append(slide)
+            continue
+        payload = {
+            "is_slide": False,
+            "reject_reason": (f"跨集重現：與其他 {n_ref} 集的代表幀最小灰階差異僅 "
+                              f"{mae:.2f}（門檻 {p.cross_episode_mae}），"
+                              f"是每集都一樣的節目包裝，不是本集的講解內容"),
+            "slide_text": "", "description": "",
+            "model_used": p.model, "prompt_version": p.prompt_version,
+        }
+        _write_cache(work, slide.slide_id, payload)
+        apply_to_slide(slide, payload)
+        stats["done"] += 1
+    log.info("S4a %s：跨集前濾（%d 支參考、%d 張代表幀）剔除 %d 張，%d 張進入分類",
+             work.video_id, n_ref, len(refs), len(hits), len(remaining))
+    return remaining
 
 
 def _check_descriptions(cfg, work, reps: list[Slide], on_call, stats: dict) -> None:

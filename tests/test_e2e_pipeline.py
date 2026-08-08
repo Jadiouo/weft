@@ -255,15 +255,33 @@ def test_boundary_f1_on_real_videos(cfg: Config):
         pytest.skip("黃金集尚未標註換頁時間點（見 tests/golden/annotate.py）")
 
     failures = []
+    observed = []
     for annotation in annotations:
         work = WorkPaths(cfg.work_dir, annotation.video_id)
         if not work.video.exists():
             pytest.skip(f"{annotation.video_id} 的影片不在 work/（請先 weft prepare）")
         candidates, _slides = s1b_slides(cfg, work)
         predicted = _internal_boundaries(candidates, annotation.duration)
-        prf = boundary_prf(predicted, annotation.confirmed, BOUNDARY_TOLERANCE_SEC)
+
+        # **只算課程本體**（使用者決定，2026-08-08）。
+        # 片頭片尾的畫面切換 S1b 一定會找到，而且找到是**對的**——
+        # 它的工作就是找出畫面靜止的區段；「這些不是投影片」是 S4a 的責任。
+        # 混在一起算，等於用課程外的雜訊懲罰它在課程內的正確行為。
+        # 實測 cxrqHABhWOU：混在一起 F1=0.645，11 個誤報**全部**在片頭片尾。
+        body_pred = [t for t in predicted if annotation.in_body(t)]
+        prf = boundary_prf(body_pred, annotation.body_confirmed, BOUNDARY_TOLERANCE_SEC)
+        scope = "課程本體" if annotation.has_body else "全片（未標本體範圍）"
+        observed.append(f"{annotation.video_id}[{scope}]: {prf}")
         if prf.f1 < BOUNDARY_F1_REAL:
-            failures.append(f"{annotation.video_id}: {prf}")
+            failures.append(f"{annotation.video_id}[{scope}]: {prf}")
+
+        # 片頭片尾**另外記錄，不設門檻**——那一段要抓什麼還沒定義清楚。
+        if annotation.has_body:
+            outside = [t for t in predicted if not annotation.in_body(t)]
+            observed.append(f"  片頭片尾：S1b 另外切出 {len(outside)} 刀"
+                            f"（不計入門檻）{[round(t) for t in outside]}")
+
+    print("\n".join(observed))  # noqa: T201 —— 紅綠都要看得到數字
     assert not failures, "\n".join(failures)
 
 
