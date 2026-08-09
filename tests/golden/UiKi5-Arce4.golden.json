@@ -1,0 +1,104 @@
+{
+  "video_id": "UiKi5-Arce4",
+  "title": "單元二 Spatial Representation and Transformation (1/2)",
+  "duration": 2427.0,
+  "url": "https://www.youtube.com/watch?v=UiKi5-Arce4",
+  "reviewed": true,
+  "annotator": "人工逐段判讀逐字稿（Claude）",
+  "annotated_on": "2026-08-09",
+  "boundaries": [],
+  "frame_classes": {},
+  "slide_classes": {},
+  "slide_groups": {},
+  "segment_boundaries": [
+    {
+      "t": 193.4,
+      "status": "confirmed",
+      "note": "從「位置怎麼表示」換到「方位需要 3x3 矩陣」與自由度的討論"
+    },
+    {
+      "t": 313.2,
+      "status": "confirmed",
+      "note": "換到 Inverse 的問題——講者明說「我們最擔心的就是 Inverse」"
+    },
+    {
+      "t": 436.5,
+      "status": "confirmed",
+      "note": "換到完整 frame 的表示：原點 P + 方位 R = 4x4 矩陣"
+    },
+    {
+      "t": 497.0,
+      "status": "confirmed",
+      "note": "換到平移的推導（P對A = P對B + B原點對A）"
+    },
+    {
+      "t": 618.2,
+      "status": "confirmed",
+      "note": "換到旋轉合成：重疊兩個原點之後只剩方位差，導出一般 frame"
+    },
+    {
+      "t": 752.2,
+      "status": "confirmed",
+      "note": "換到平移的**交換性**（往東走再往北 vs 往北再往東）"
+    },
+    {
+      "t": 858.2,
+      "status": "confirmed",
+      "note": "換到旋轉**不可**交換（對X轉30再對Y轉30）"
+    },
+    {
+      "t": 918.7,
+      "status": "confirmed",
+      "note": "換到「旋轉需要軸與角度兩個參數」——引出從 3x3 反推軸角的問題"
+    },
+    {
+      "t": 982.7,
+      "status": "confirmed",
+      "note": "換到「為什麼選特殊軸」：任意軸難描寫，所以退回 X/Y/Z"
+    },
+    {
+      "t": 1101.7,
+      "status": "confirmed",
+      "note": "**離題插曲**：五對五籃球變五場單打的比喻，講控制的目的是把複雜系統弄單純。依規範第 3 條的例外切開——它自成一段"
+    },
+    {
+      "t": 1223.1,
+      "status": "confirmed",
+      "note": "換到 NOAP 的慣例（Z=approach、O=orientation、N=normal）"
+    },
+    {
+      "t": 1404.8,
+      "status": "confirmed",
+      "note": "**離題插曲**：機器人是人造的；物理學家追求真、數學家追求美、工程師求實用。與當下的推導無關，自成一段"
+    },
+    {
+      "t": 1524.8,
+      "status": "confirmed",
+      "note": "換到前乘 vs 後乘：運作矩陣該乘在前面還是後面"
+    },
+    {
+      "t": 1818.7,
+      "status": "confirmed",
+      "note": "換到複合 transformation（compound）——多個轉換串接"
+    },
+    {
+      "t": 1856.7,
+      "status": "confirmed",
+      "note": "換到 4x4 的 inversion：旋轉部分可用 transpose，位置那一欄不行"
+    },
+    {
+      "t": 1948.7,
+      "status": "confirmed",
+      "note": "換到任意軸旋轉的問題：從 NOAP 反推「對哪個軸轉幾度」"
+    },
+    {
+      "t": 2187.1,
+      "status": "confirmed",
+      "note": "**摩天輪的比喻**與 R_K(θ) = C·R_Z(θ)·C⁻¹ 的推導"
+    }
+  ],
+  "body_start": 12.4,
+  "body_end": 2413.06,
+  "holdout": true,
+  "notes": "**分段標註規範**：沿用 `cxrqHABhWOU` 與 `2FjApOVIbUs` 的六條（票 06）。\n一個邊界 = 換到「讀者只看新的那段也讀得懂」的程度；看逐字稿不看畫面；\n比喻與離題屬於它服務的那一段，除非自成一段的插曲；只標 body 之間；\n每個邊界寫理由。\n\n**這一支是純保留集。** ngram TextTiling 的參數（`block_chars=40`、\n`block_window=3`）完全是在中醫講經上決定的，這批素材在標註時\n從未參與任何調校。R26 的教訓：一條在某批素材上成立的規則，\n換一個型態可能整組失效。\n\n**STEM 素材的話題結構與講經不同**：講經是「引經文 → 白話解說 → 比喻」，\n這裡是「定義 → 推導 → 為什麼這樣選 → 離題 → 回主線」。\n推導段落之間的用詞高度重疊（矩陣、旋轉、座標系反覆出現），\n這對以字元共現為基礎的方法是不利的條件——**那正是要測的**。\n\n**沒有 body 標註的理由**：這支沒有片頭片尾包裝，第一句就進入內容\n（12 秒），最後一句是收尾。整支都是 body。"
+}

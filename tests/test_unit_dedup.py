@@ -202,7 +202,22 @@ def test_grouping_agrees_with_an_independent_metric():
     work_root = Path("work")
     checked = 0
     for golden in sorted(Path("tests/golden").glob("*.golden.json")):
-        video_id = json.loads(golden.read_text(encoding="utf-8"))["video_id"]
+        annotation = json.loads(golden.read_text(encoding="utf-8"))
+        video_id = annotation["video_id"]
+        # **只驗人工複核過分組的影片。** 原本以「有沒有黃金集檔案」當範圍，
+        # 但那個集合已經和「分組被人看過」分家了——票 06 之後有些檔案只標
+        # 內容邊界（`segment_boundaries`），沒有 `slide_groups`。
+        #
+        # 而這條檢查的前提**不是對所有素材都成立**：實測 NYCU 機器人學上
+        # 兩個假設同時反轉——講者在黑板前的鏡頭是同一個場景卻因為他在動
+        # 而像素差很大（S1c 正確地合併，交叉檢查卻判為誤併）；不同的投影片
+        # 共用同一個模板（標題列、校徽浮水印）所以像素差極小（S1c 正確地
+        # 不合併，交叉檢查卻判為漏併）。逐張開圖確認過 S1c 是對的。
+        #
+        # 兩個獨立度量畫不出同一條線時，**也可能是它們量的東西不同**，
+        # 不必然是演算法錯。見 known-risks R29。
+        if not annotation.get("slide_groups"):
+            continue
         dedup_path = work_root / video_id / "04_dedup.json"
         if not dedup_path.exists():
             continue
