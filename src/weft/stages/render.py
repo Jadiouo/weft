@@ -275,6 +275,12 @@ def write_provenance_record(verdict, path: Path, ir=None, transcript=None) -> di
             v for v in verdict.unverified
             if not v.wrong_source and not v.depends_on_correction
         ]),
+        # **成因分解的第四類**（R42）：內容裡有來源沒有的數學符號。
+        # 與上面三類**不互斥**——它是「為什麼溯不到」的一個側寫，
+        # 不是另一個桶子。混進 `unresolved` 的分母會讓那一欄失去意義。
+        "with_fabricated_symbols": len([
+            v for v in verdict.unverified if v.fabricated_symbols
+        ]),
     }
     # **產出量**。通過率上升有可能只是因為寫得比較少（見 `content_yield`）。
     if ir is not None:

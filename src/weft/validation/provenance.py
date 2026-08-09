@@ -157,6 +157,82 @@ def number_variants(entity: str) -> set[str]:
     return out
 
 
+#: 符號型實體的樣式。**順序有意義**：長的先吃掉字元，否則 `4x4` 會被
+#: 切出一個假的 `x4`（R42 第一版就是這樣，通過組的誤報有一半來自它）。
+#:
+#: 刻意**不抓單獨的大寫字母**——「A 乘 B」裡的 A、B 太常見，
+#: 抓了會把每個 block 都告警。
+_SYMBOL_PATTERNS = (
+    re.compile(r"[A-Za-z]{2,}\([^)]{1,20}\)"),   # Rz(φ)、Euler(φ,θ,ψ)
+    re.compile(r"\d{1,3}\s*[x×]\s*\d{1,3}"),     # 4x4、3×3
+    re.compile(r"[A-Za-z][₀-₉ₓᵧ]{1,3}"),          # R₁₁、n₃、nₓ
+    re.compile(r"(?<![A-Za-z\d])[A-Za-z]_?\d{1,3}(?![\d.])"),  # R11、T_2
+)
+
+_SUBSCRIPT_DIGITS = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
+_ARABIC_TO_CJK = {"0": "零", "1": "一", "2": "二", "3": "三", "4": "四",
+                  "5": "五", "6": "六", "7": "七", "8": "八", "9": "九"}
+
+
+def symbol_entities(text: str) -> set[str]:
+    """數學／符號型的「具名實體」。不重疊抽取，長樣式優先。
+
+    `extract_named_entities` 抓的是書名、年代、中文數字——那是為中醫講經
+    設計的。實測 `extract_named_entities("四乘四矩陣用於表示坐標系B到
+    坐標系A的完整轉換")` 回傳**空集合**，所以在 STEM 素材上那個檢查
+    是空轉的（R42）。
+    """
+    taken = [False] * len(text)
+    out: set[str] = set()
+    for pat in _SYMBOL_PATTERNS:
+        for m in pat.finditer(text):
+            a, b = m.span()
+            if any(taken[a:b]):
+                continue
+            taken[a:b] = [True] * (b - a)
+            if m.group(0).strip():
+                out.add(m.group(0).strip())
+    return out
+
+
+def symbol_variants(entity: str) -> set[str]:
+    """同一個符號的其他寫法。
+
+    **沒有這個，正規化會被誤判成編造**：模型把口說的「四乘四」寫成
+    `4x4`、「R 一一」寫成 `R₁₁`，那是書面化不是幻覺（R36 記過）。
+    """
+    plain = entity.translate(_SUBSCRIPT_DIGITS)
+    forms = {entity, plain, plain.replace("_", ""), plain.replace(" ", "")}
+
+    m = re.fullmatch(r"(\d{1,3})\s*[x×]\s*(\d{1,3})", plain.replace(" ", ""))
+    if m:
+        a, b = m.group(1), m.group(2)
+        ca = "".join(_ARABIC_TO_CJK.get(d, d) for d in a)
+        cb = "".join(_ARABIC_TO_CJK.get(d, d) for d in b)
+        forms |= {f"{a}x{b}", f"{a}×{b}", f"{a}乘{b}", f"{a}乘以{b}",
+                  f"{ca}乘{cb}", f"{ca}x{cb}", f"{ca}乘以{cb}"}
+
+    m = re.fullmatch(r"([A-Za-z])(\d{1,3})", plain)
+    if m:
+        head, digits = m.group(1), m.group(2)
+        spoken = "".join(_ARABIC_TO_CJK.get(d, d) for d in digits)
+        forms |= {f"{head}{digits}", f"{head} {digits}",
+                  f"{head}{spoken}", f"{head} {spoken}"}
+    return {f for f in forms if f}
+
+
+def unsupported_symbols(candidate: str, source: str) -> list[str]:
+    """candidate 裡出現、但來源（含各種寫法）沒有的符號。"""
+    src = re.sub(r"\s+", "", source)
+    src_plain = src.translate(_SUBSCRIPT_DIGITS)
+    missing = []
+    for entity in symbol_entities(candidate):
+        forms = {v.replace(" ", "") for v in symbol_variants(entity)}
+        if not any(f in src or f in src_plain for f in forms):
+            missing.append(entity)
+    return sorted(missing)
+
+
 def unsupported_entities(candidate: str, source: str) -> list[str]:
     """candidate 中出現、但來源沒有的具名實體。
 
@@ -192,6 +268,19 @@ class BlockVerdict:
     #: 所以它實質溯到的是投影片。仍然算未通過：術語校正的 precision 門檻
     #: 是 0.90，沒有餘裕，不能拿它當「有出處」的依據。
     depends_on_correction: bool = False
+    #: 未通過，且內容裡有**來源沒有的數學符號**（見 `_diagnose_symbols`）。
+    #:
+    #: R39 §3.1 手讀時判定為真編造的那一筆就是這類：`UiKi5#015#b03` 寫出
+    #: `R₁₁(a) • R₁₂(β)`，而講者說的是「對哪個軸轉幾度」。
+    #:
+    #: **這是診斷不是閘門。** R42 量過：它在未通過組的告警率 25.0%、
+    #: 通過組 1.6%（區辨 15.6 倍），但被它抓到的 block **本來就已經未通過**
+    #: ——當成新閘門加不了值，而多抓的那 1.6% 看起來是正規化（`Rₓ`、
+    #: `Rcz(θ)`）不是編造，當閘門會誤殺。
+    #:
+    #: 它的價值在於**把「為什麼失敗」自動化**：原本只寫「相似度 0.039」，
+    #: R39 是靠人逐段讀才分出三種成因。
+    fabricated_symbols: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -324,6 +413,14 @@ def _diagnose_wrong_source(ir, seg, block, transcript: str, cfg, verdict) -> Non
         verdict.wrong_source = True
 
 
+def _diagnose_symbols(block, source: str, verdict) -> None:
+    """未通過的 block 裡，有哪些符號在來源找不到（含各種寫法）。
+
+    只對**已經未通過**的 block 跑——它是成因分解，不是額外的閘門。
+    """
+    verdict.fabricated_symbols = unsupported_symbols(block.text, source)
+
+
 def _diagnose_correction_dependency(seg, block, cfg, verdict) -> None:
     """未通過時，看看它是不是**只有靠 S4b 的校正才對得上**。
 
@@ -397,6 +494,7 @@ def check_video(ir: VideoIR, cfg: ProvenanceConfig) -> VideoVerdict:
             verdict = check_block(block, source, cfg, seg.segment_id, i)
             _diagnose_wrong_source(ir, seg, block, transcript, cfg, verdict)
             _diagnose_correction_dependency(seg, block, cfg, verdict)
+            _diagnose_symbols(block, source, verdict)
             block.verification = verdict.status
             block.similarity = verdict.similarity
             # 成因也寫回 block，不只留在 verdict 上——`08_video.json` 與

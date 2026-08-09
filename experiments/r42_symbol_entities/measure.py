@@ -38,20 +38,33 @@ _CJK_DIGIT = {"零": "0", "一": "1", "二": "2", "兩": "2", "三": "3", "四":
               "五": "5", "六": "6", "七": "7", "八": "8", "九": "9", "十": "10"}
 
 #: 符號型實體。刻意**不抓單獨的大寫字母**——「A 乘 B」裡的 A、B 太常見，
-#: 抓了會把每個 block 都告警。只抓帶結構的：
+#: 抓了會把每個 block 都告警。只抓帶結構的。
+#:
+#: **順序有意義**：長的樣式先吃掉字元，否則 `4x4` 會被切出一個假的 `x4`
+#: （第一版就是這樣，通過組的誤報有一半來自它）。
 _PATTERNS = (
-    re.compile(r"[A-Za-z][₀-₉]{1,3}"),          # R₁₁、T₂
-    re.compile(r"[A-Za-z]_?\d{1,3}(?![\d.])"),  # R11、T_2
-    re.compile(r"\d{1,3}\s*[x×]\s*\d{1,3}"),    # 4x4、3×3
     re.compile(r"[A-Za-z]{2,}\([^)]{1,20}\)"),  # Rz(φ)、Euler(φ,θ,ψ)
+    re.compile(r"\d{1,3}\s*[x×]\s*\d{1,3}"),    # 4x4、3×3
+    re.compile(r"[A-Za-z][₀-₉ₓ]{1,3}"),          # R₁₁、n₃、nₓ
+    re.compile(r"(?<![A-Za-z\d])[A-Za-z]_?\d{1,3}(?![\d.])"),  # R11、T_2
 )
 
 
 def symbol_entities(text: str) -> set[str]:
+    """不重疊抽取：長樣式優先，吃掉的字元不再參與後面的樣式。"""
+    taken = [False] * len(text)
     out: set[str] = set()
     for pat in _PATTERNS:
-        out.update(m.group(0).strip() for m in pat.finditer(text))
-    return {e for e in out if e}
+        for m in pat.finditer(text):
+            a, b = m.span()
+            if any(taken[a:b]):
+                continue
+            for i in range(a, b):
+                taken[i] = True
+            e = m.group(0).strip()
+            if e:
+                out.add(e)
+    return out
 
 
 def variants(entity: str) -> set[str]:
@@ -96,13 +109,18 @@ def main() -> None:
             continue
         ir = VideoIR.model_validate_json(w.video_ir.read_text(encoding="utf-8"))
         tr = Transcript.model_validate_json(w.transcript.read_text(encoding="utf-8"))
+        cues = tr.cues
         for seg in ir.segments:
             if seg.understanding is None:
                 continue
+            # `resolve_source` 的第三個參數是**該段的逐字稿字串**，不是
+            # Transcript 物件。這裡自己組。
+            seg_text = "".join(cues[i].text_raw for i in seg.cue_indices
+                               if i < len(cues))
             for bi, b in enumerate(seg.understanding.content_blocks):
                 if b.verification is None:
                     continue
-                src = resolve_source(ir, b, tr)
+                src = resolve_source(ir, b, seg_text)
                 ents = symbol_entities(b.text)
                 miss = unsupported(b.text, src)
                 rows.append({
