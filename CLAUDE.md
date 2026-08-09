@@ -23,7 +23,7 @@
 ~/miniconda3/envs/pipe-gpu/bin/python     # GPU 工作
 
 # 測試。**預設就是離線的**——不需要網路、雲端額度、或本地模型服務。
-# 乾淨機器上實測 554 passed / 4 skipped / 0 failed，19 秒。
+# 乾淨機器上實測 616 passed / 5 skipped / 0 failed，19 秒。
 ~/miniconda3/envs/pipe-cpu/bin/python -m pytest tests/ -q
 
 # 需要外部資源的那一層（下載影片 + 本地 ollama）。**手動跑。**
@@ -59,7 +59,8 @@ tests/test_e2e_pipeline.py::test_slide_classification_on_real_videos
 「只 assert 常數值」的同類——綠燈製造「有人管」的錯覺。
 
 回來時比對這四個數字：**一樣就是沒退步，變了才要查**。
-它需要 `work/` 下的快取產物；乾淨機器上這條會 skip。
+它需要 `work/` 下的快取產物；乾淨機器上這條會 skip，全套是
+**616 passed / 5 skipped / 0 failed**（有 `work/` 時 620 passed / 1 failed）。
 
 ### 第二條要盯的：分段（2026-08-09 起）
 
