@@ -69,8 +69,12 @@ s4:
   model: gemini:gemini-3.1-flash-lite
   # v0.4 預設不送圖——投影片文字已由 S4a 讀出並以文字掛進 prompt
   send_images: false
-  # v6：改寫 provenance_kind 的說明（R27：15/27 未通過是來源標錯）。改 prompt 必改此值。
-  prompt_version: v7
+  # v6：改寫 provenance_kind 的說明（R27：15/27 未通過是來源標錯）。
+  # v8：加涵蓋度規定——**S4c 每段產出的 block 數原本與段落長短無關**
+  #     （實測 1.2–1.9 個），所以 depth_alpha 一調、段數砍半，內容就砍半
+  #     （2FjApOVIbUs 總字數 −47%，而通過率反而升到 1.000）。
+  # **改 prompt 必改此值**，否則舊快取會被當成新結果（D30）。
+  prompt_version: v8
   batch_segments: 3
   prev_summary_max_chars: 200
   max_retries: 2

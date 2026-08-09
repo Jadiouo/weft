@@ -50,6 +50,7 @@
 | 13 | [Obsidian 落地](13-obsidian-landing.md) | 11 | **收尾兌現** |
 | 14 | [[探索] 階層式分段](14-treeseg-exploration.md) | 08 | **不在收尾範圍**（FROZEN F5）|
 | 15 | [`series_id` 沒流到 chunk](15-series-id-propagation.md) | — | 票 13 回報的後續，**不在收尾範圍** |
+| 16 | [STEM 分段仍輸給不分段](16-stem-segmentation.md) | 需更多標註 | R40／R41 的後續，**不在收尾範圍** |
 
 ## 狀態（2026-08-09）
 
