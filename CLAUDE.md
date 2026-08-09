@@ -59,8 +59,28 @@ tests/test_e2e_pipeline.py::test_slide_classification_on_real_videos
 「只 assert 常數值」的同類——綠燈製造「有人管」的錯覺。
 
 回來時比對這四個數字：**一樣就是沒退步，變了才要查**。
-它需要 `work/` 下的快取產物；乾淨機器上這條會 skip，全套是
-**554 passed / 4 skipped / 0 failed**（有 `work/` 時 557 passed / 1 failed）。
+它需要 `work/` 下的快取產物；乾淨機器上這條會 skip。
+
+### 第二條要盯的：分段（2026-08-09 起）
+
+```
+tests/test_e2e_pipeline.py::test_segmentation_beats_not_segmenting_at_all
+  cxrqHABhWOU 一刀不切 0.451 / 現行 0.360  贏
+  2FjApOVIbUs 一刀不切 0.464 / 現行 0.359  贏
+  UiKi5-Arce4 一刀不切 0.467 / 現行 0.562  **輸**
+```
+
+**這條是綠的，但它印出來的第三行是輸的。** 那不是被藏起來——
+三個數字都釘在測試裡，退步（曾經贏過的變成輸）或漂移超過 0.01 都會紅。
+
+「一刀不切」是免費的下界。**贏不過它就是在做負功**——
+R40 就是靠加這條線，發現 Hearst 1997 的原始 α=−0.5 在三支上全輸。
+STEM 那支目前仍未修好（票 16），見 known-risks R33。
+
+> **不要用 boundary F1 判斷分段好壞。** 它對過度分割結構上不敏感：
+> 同一批改動在 ±10s F1 上 0.429→0.421（幾乎不動），
+> 在 WindowDiff 上是 0.529→0.360。見 R37／R40 與
+> `docs/research/2026-08-09-prior-art-segmentation-granularity.md`。
 
 > `python` 這個裸指令在這台機器上不存在。用完整路徑或先 activate。
 
