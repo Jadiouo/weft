@@ -37,6 +37,27 @@ import logging
 
 import numpy as np
 
+#: TextTiling 深度門檻的 `cutoff = µ + α·σ` 裡的 α。
+#:
+#: **Hearst 1997 的原始設定是 −0.5，而 R40 實測那個值在三支影片上
+#: 全部輸給「整支影片當一段」**（WindowDiff 0.529／0.490／0.772
+#: vs 一刀不切的 0.451／0.464／0.467）——原設定在做負功。
+#:
+#: +0.75 是**調校集 `cxrqHABhWOU` 上的最佳值**（與 +1.0 並列，取較保守者），
+#: 兩個保留集都改善且沒有打回原形：
+#:
+#:     α       cxrq(調校)   2Fj(保留)   UiKi5(保留 STEM)
+#:     −0.50     0.529       0.490        0.772
+#:     +0.75     0.360       0.359        0.562
+#:
+#: **STEM 仍未修好**：0.562 依然輸給一刀不切的 0.467。改善了，沒解決。
+#: 根本原因是 α 是**整支影片一個門檻**，無法在同一支影片裡分區調整，
+#: 而 STEM 的參考段長差 7.7 倍。見 R40 §6。
+#:
+#: 這個值改動會讓所有 segment_id 位移 → S4c 快取全部失效（D32）。
+#: 改之前先看 `experiments/r40_granularity/REPORT.md`。
+DEPTH_ALPHA: float = 0.75
+
 log = logging.getLogger(__name__)
 
 
@@ -71,11 +92,14 @@ def window_similarity(vectors: np.ndarray, window: int) -> np.ndarray:
     return out
 
 
-def depth_cut_indices(scores: np.ndarray) -> list[int]:
+def depth_cut_indices(scores: np.ndarray, alpha: float = DEPTH_ALPHA) -> list[int]:
     """TextTiling 的深度分數與斷點選取。回傳「在 block i 與 i+1 之間切」的 i。
 
-    門檻用 **Hearst 1997 的 `mean − std/2`**，不是自訂的，也**不把正確答案
-    的數量餵給方法**——後者會讓任何量測變成「給它 N 個答案它就切 N 刀」。
+    門檻是文獻裡的參數化形式 `cutoff = µ + α·σ`；Hearst 1997 的原始設定
+    是 α = −0.5。**仍然不把正確答案的數量餵給方法**——後者會讓任何量測
+    變成「給它 N 個答案它就切 N 刀」。
+
+    α 由 R40 在調校集上選出，見 `DEPTH_ALPHA`。
     """
     if len(scores) < 3:
         return []
@@ -93,7 +117,7 @@ def depth_cut_indices(scores: np.ndarray) -> list[int]:
             right = max(right, scores[j])
         depths[i] = (left - scores[i]) + (right - scores[i])
 
-    cutoff = depths.mean() - depths.std() / 2
+    cutoff = depths.mean() + alpha * depths.std()
     return [i for i in range(1, len(depths) - 1)
             if depths[i] > cutoff
             and depths[i] >= depths[i - 1] and depths[i] >= depths[i + 1]]
@@ -116,7 +140,8 @@ def _blocks(cues, block_chars: int) -> list[tuple[float, str]]:
     return out
 
 
-def topic_boundaries(cues, block_chars: int, window: int) -> list[float]:
+def topic_boundaries(cues, block_chars: int, window: int,
+                     alpha: float = DEPTH_ALPHA) -> list[float]:
     """逐字稿的話題邊界（秒）。**不看畫面。**
 
     沒有逐字稿或內容太短時回傳空清單——那不是錯誤，是「這支影片沒有東西
@@ -127,7 +152,7 @@ def topic_boundaries(cues, block_chars: int, window: int) -> list[float]:
         return []
     vectors = char_ngram_vectors([t for _, t in blocks])
     scores = window_similarity(vectors, window)
-    return [blocks[i + 1][0] for i in depth_cut_indices(scores)]
+    return [blocks[i + 1][0] for i in depth_cut_indices(scores, alpha)]
 
 
 def enforce_min_length(boundaries: list[float], duration: float,

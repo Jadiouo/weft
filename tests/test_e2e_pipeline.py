@@ -308,6 +308,92 @@ def test_boundary_f1_on_real_videos(cfg: Config):
 
 
 @pytest.mark.golden
+def test_segmentation_beats_not_segmenting_at_all(cfg: Config):
+    """§5.2 補：分段的 WindowDiff 要贏過「整支影片當一段」。
+
+    **這條線是 R40 揭穿舊設定的方式。** 「一刀不切」是免費的下界——
+    贏不過它，分段就是在做負功。而 Hearst 1997 的原始 α = −0.5
+    在三支真實影片上**全部輸給它**（0.529／0.490／0.772 vs
+    0.451／0.464／0.467），先前所有量測都沒看出來，因為 boundary F1
+    對過度分割結構上不敏感（R37）。
+
+    合成素材做不出這個失敗（`test_unit_segment_granularity.py` 只守得住
+    常數與方向），所以真正的驗收只能在這裡。
+
+    **STEM 目前是紅的，而且是刻意留著的真紅燈**——與分類那條同類。
+    α=+0.75 把它從 0.772 改善到 0.562，但仍輸給 0.467。
+    根本原因是 α 是整支影片一個門檻，無法在同一支影片裡分區調整，
+    而 STEM 的參考段長差 7.7 倍（R40 §6）。
+
+    回來時比對這些數字：**一樣就是沒退步，變了才要查。**
+    """
+    from weft.ir import CandidateSet, Transcript
+    from weft.stages.segment import DEPTH_ALPHA, enforce_min_length, topic_boundaries
+    from weft.validation.metrics import boundary_string, default_window, window_diff
+
+    #: R40 實測，`α=+0.75`。改動 `DEPTH_ALPHA`、`block_chars`、`block_window`
+    #: 或分段演算法都會讓這些數字變。
+    EXPECTED = {
+        "cxrqHABhWOU": (0.451, 0.360),   # (一刀不切, 現行) —— 贏
+        "2FjApOVIbUs": (0.464, 0.359),   # 贏
+        "UiKi5-Arce4": (0.467, 0.562),   # **輸**，見 docstring
+    }
+
+    annotations = [a for a in _golden_annotations() if a.topic_boundaries]
+    if not annotations:
+        pytest.skip("黃金集尚未標註內容邊界")
+
+    observed, drifted, regressed = [], [], []
+    for annotation in annotations:
+        work = WorkPaths(cfg.work_dir, annotation.video_id)
+        if not work.transcript.exists() or not work.candidates.exists():
+            pytest.skip(f"{annotation.video_id} 缺少 prepare 產物")
+        transcript = Transcript.model_validate_json(
+            work.transcript.read_text(encoding="utf-8"))
+        candidates = CandidateSet.model_validate_json(
+            work.candidates.read_text(encoding="utf-8"))
+
+        lo, hi = annotation.body_start, annotation.body_end
+        truth = sorted(annotation.topic_boundaries)
+        units = [c.t_start for c in transcript.cues if lo <= c.t_start < hi]
+        reference = boundary_string(truth, units)
+        k = default_window(reference)
+
+        cuts = [t for t in enforce_min_length(
+            topic_boundaries(transcript.cues, cfg.s3.block_chars,
+                             cfg.s3.block_window, DEPTH_ALPHA),
+            candidates.duration, cfg.s3.min_segment_sec) if lo < t < hi]
+        ours = window_diff(reference, boundary_string(cuts, units), k)
+        nothing = window_diff(reference, "0" * len(units), k)
+
+        verdict = "贏" if ours < nothing else "**輸**"
+        observed.append(
+            f"{annotation.video_id}: 一刀不切 {nothing:.3f} / 現行 {ours:.3f}"
+            f"（{len(cuts)} 刀 vs 真實 {len(truth)}）{verdict}")
+
+        expected = EXPECTED.get(annotation.video_id)
+        if expected is None:
+            continue
+        exp_nothing, exp_ours = expected
+        if abs(nothing - exp_nothing) > 0.01 or abs(ours - exp_ours) > 0.01:
+            drifted.append(
+                f"{annotation.video_id}: 預期 ({exp_nothing:.3f}, {exp_ours:.3f})"
+                f"、實際 ({nothing:.3f}, {ours:.3f})")
+        # 曾經贏過的不得變成輸——那是退步，與 STEM 的「還沒解」不同
+        if exp_ours < exp_nothing and ours >= nothing:
+            regressed.append(
+                f"{annotation.video_id}: 原本贏過「一刀不切」，現在輸了"
+                f"（{ours:.3f} vs {nothing:.3f}）")
+
+    print("\n".join(observed))  # noqa: T201 —— 紅綠都要看得到數字
+    assert not regressed, "\n".join(regressed)
+    assert not drifted, (
+        "WindowDiff 數字變了。**這不必然是壞事**——若你剛改了分段，"
+        "確認方向對之後更新 EXPECTED；若你沒改，那就是別的東西動了。\n"
+        + "\n".join(drifted))
+
+
+@pytest.mark.golden
 def test_slide_classification_on_real_videos(cfg: Config):
     """§5.2：「這張候選幀是不是投影片」的 accuracy ≥ 0.95（真實影片）。
 

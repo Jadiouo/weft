@@ -207,3 +207,92 @@ def margin_over_uniform(
         uniform_boundaries(lo, hi, len(predicted)), ground_truth, tolerance_sec
     ).f1
     return method, baseline, tolerance_coverage(lo, hi, len(predicted), tolerance_sec)
+
+
+def boundary_string(cuts: list[float], unit_starts: list[float]) -> str:
+    """把「秒」的邊界轉成 WindowDiff 吃的單位序列。
+
+    每個單位（逐字稿的 cue）一個字元，`'1'` 表示**這個單位之後有邊界**。
+    長度固定為 `len(unit_starts)`，最後一個位置永遠是 `'0'`
+    （文末不是邊界，兩邊都不標才不會平白多一分）。
+
+    用 cue 當單位而不是固定秒格：cue 中位長 1.6–2.1 秒，
+    而且它就是 TextTiling 實際運作的顆粒。
+    """
+    marks = ["0"] * len(unit_starts)
+    for t in cuts:
+        # 找出這一刀落在哪個單位之後
+        idx = -1
+        for i, start in enumerate(unit_starts):
+            if start <= t:
+                idx = i
+            else:
+                break
+        if 0 <= idx < len(marks) - 1:
+            marks[idx] = "1"
+    return "".join(marks)
+
+
+def default_window(reference: str, boundary: str = "1") -> int:
+    """Pevzner & Hearst 的 `k` = **參考分段平均段長的一半**。
+
+    這是定義算出來的，**不是挑的**——R37 的教訓是事後挑出來的容忍窗
+    會變成另一個沒有依據的旋鈕。
+    """
+    n_boundaries = reference.count(boundary)
+    return max(1, round(len(reference) / (n_boundaries + 1) / 2))
+
+
+def window_diff(
+    reference: str,
+    hypothesis: str,
+    k: int | None = None,
+    boundary: str = "1",
+    weighted: bool = False,
+) -> float:
+    """WindowDiff（Pevzner & Hearst 2002）。**越低越好，完美為 0。**
+
+    滑動寬度 `k` 的視窗，比較兩邊視窗內的**邊界數量**：
+
+        WindowDiff = 1/(N−k) · Σ_i [ |b_ref(i, i+k) − b_hyp(i, i+k)| > 0 ]
+
+    **為什麼不用 boundary F1**：F1 對「切太碎」結構上不敏感——
+    多出來的刀只要落在容忍窗裡就照樣得分。R37 實測 ±20s 的容忍窗
+    在現行刀數下覆蓋 95% 的時間軸，於是「切 3.4 倍的刀」與
+    「切對」拿到的分數幾乎一樣。WindowDiff 比的是數量，
+    多切的每一刀都會讓視窗對不上。
+
+    **為什麼不用 Pk**：Pevzner & Hearst 列的四個缺陷裡，第四個就是
+    「預測出遠多於參考的邊界的系統，拿到的懲罰與沒那麼誇張的差不多」——
+    它不罰落在參考邊界 k 距離內的假陽性。Pk 對我們要抓的東西同樣遲鈍。
+
+    `weighted=True` 改成累加 `|b_ref − b_hyp|` 而不封頂在 1，
+    對過度分割罰得更重。預設 False（論文的主定義）。
+
+    實作照 nltk `metrics.segmentation.windowdiff` 的定義；
+    它公布的三個期望值釘在 `tests/test_unit_windowdiff.py`。
+    **沒有引入 nltk 相依**——與票 07 選 ngram 而非 sbert 同一個天平。
+    """
+    if len(reference) != len(hypothesis):
+        raise ValueError(
+            f"兩個分段長度不同（{len(reference)} vs {len(hypothesis)}）——"
+            f"WindowDiff 要求同一組單位上的兩個標記"
+        )
+    if k is None:
+        k = default_window(reference, boundary)
+    if k < 0:
+        raise ValueError("視窗寬度 k 不得為負")
+    if k > len(reference):
+        raise ValueError(f"視窗寬度 k={k} 大於分段長度 {len(reference)}")
+
+    total = 0.0
+    count_ref = reference[:k].count(boundary)
+    count_hyp = hypothesis[:k].count(boundary)
+    for i in range(len(reference) - k + 1):
+        if i > 0:
+            # 視窗右移一格：丟掉 i-1、納入 i+k-1（增量維護，避免 O(n·k)）
+            count_ref += (reference[i + k - 1] == boundary) - (reference[i - 1] == boundary)
+            count_hyp += (hypothesis[i + k - 1] == boundary) - (hypothesis[i - 1] == boundary)
+        ndiff = abs(count_ref - count_hyp)
+        total += ndiff if weighted else min(1, ndiff)
+    return total / (len(reference) - k + 1.0)

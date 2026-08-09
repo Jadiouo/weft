@@ -1,0 +1,83 @@
+[
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "黃金集（參考）",
+    "n": 10,
+    "window_diff": 0.0,
+    "f1_10s": 1.0,
+    "cv": 0.553,
+    "spread": 4.9
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "ngram α=+0.55",
+    "n": 10,
+    "window_diff": 0.409,
+    "f1_10s": 0.4,
+    "cv": 0.563,
+    "spread": 4.8
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "固定每 79s",
+    "n": 10,
+    "window_diff": 0.545,
+    "f1_10s": 0.2,
+    "cv": 0.0,
+    "spread": 1.0
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "黃金集（參考）",
+    "n": 15,
+    "window_diff": 0.0,
+    "f1_10s": 1.0,
+    "cv": 0.439,
+    "spread": 4.3
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "ngram α=+0.75",
+    "n": 15,
+    "window_diff": 0.359,
+    "f1_10s": 0.333,
+    "cv": 0.48,
+    "spread": 3.4
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "固定每 94s",
+    "n": 15,
+    "window_diff": 0.49,
+    "f1_10s": 0.133,
+    "cv": 0.0,
+    "spread": 1.0
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "黃金集（參考）",
+    "n": 17,
+    "window_diff": 0.0,
+    "f1_10s": 1.0,
+    "cv": 0.508,
+    "spread": 7.7
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "ngram α=+1.50",
+    "n": 18,
+    "window_diff": 0.502,
+    "f1_10s": 0.286,
+    "cv": 1.095,
+    "spread": 34.6
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "固定每 133s",
+    "n": 17,
+    "window_diff": 0.605,
+    "f1_10s": 0.0,
+    "cv": 0.0,
+    "spread": 1.0
+  }
+]
