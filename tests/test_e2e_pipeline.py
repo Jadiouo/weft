@@ -243,8 +243,8 @@ def test_boundary_f1_on_real_videos(cfg: Config):
     §5.5 #7：**不得為了讓測試通過而調低此門檻。**
     """
     from weft.stages.local import s1b_slides
-    from weft.validation.metrics import boundary_prf
-    from weft.validation.thresholds import BOUNDARY_F1_REAL
+    from weft.validation.metrics import boundary_prf, margin_over_uniform
+    from weft.validation.thresholds import BOUNDARY_F1_REAL, MAX_TOLERANCE_COVERAGE
 
     # **只取有標換頁點的**。標註檔存在但 boundaries 為空時，
     # 若照算會得到 F1=0.000（TP=0 FP=49 FN=0）——那是「還沒標」不是
@@ -274,6 +274,28 @@ def test_boundary_f1_on_real_videos(cfg: Config):
         observed.append(f"{annotation.video_id}[{scope}]: {prf}")
         if prf.f1 < BOUNDARY_F1_REAL:
             failures.append(f"{annotation.video_id}[{scope}]: {prf}")
+
+        # **先檢查這個門檻還有沒有效，再看它過不過。**
+        # F1 的分數有多少來自「切得準」、多少來自「切得多」，取決於容忍窗
+        # 涵蓋了多少時間軸。R37 在分段上量到覆蓋率 95% 時，「不看內容
+        # 等距切」的對照組拿到 0.459 而方法是 0.432——**只看 F1 會得到
+        # 完全反的結論**。這裡目前是 46%，健康。
+        #
+        # 這一段不是裝飾：§5.2 的十項門檻裡有 7 項只 assert 常數值
+        # （D30 / DANGLING_THRESHOLDS），而它們紅不了正是因為
+        # **沒有人檢查「檢查」本身還成不成立**。
+        f1, uniform_f1, coverage = margin_over_uniform(
+            body_pred, annotation.body_confirmed,
+            annotation.body_start, annotation.body_end, BOUNDARY_TOLERANCE_SEC)
+        observed.append(
+            f"  等距對照組 {uniform_f1:.3f}（差 {f1 - uniform_f1:+.3f}）"
+            f"／容忍窗覆蓋 {coverage:.0%}")
+        if coverage > MAX_TOLERANCE_COVERAGE:
+            failures.append(
+                f"{annotation.video_id}：±{BOUNDARY_TOLERANCE_SEC:g}s 的容忍窗覆蓋了"
+                f" {coverage:.0%} 的時間軸（上限 {MAX_TOLERANCE_COVERAGE:.0%}）——"
+                f"F1 {f1:.3f} 這個數字**已經量不出東西**，等距對照組是 {uniform_f1:.3f}。"
+                f"不要調低 F1 門檻，要縮小容忍窗或問為什麼刀數變這麼多。")
 
         # 片頭片尾**另外記錄，不設門檻**——那一段要抓什麼還沒定義清楚。
         if annotation.has_body:

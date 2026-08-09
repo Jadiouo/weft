@@ -161,3 +161,49 @@ def correction_outcome_prf(
     recall = fixed / len(expected) if expected else (1.0 if not applied else 0.0)
     f1 = 2 * precision * recall / (precision + recall) if (precision + recall) else 0.0
     return PRF(precision, recall, f1, tp, fp, fn)
+
+
+def uniform_boundaries(lo: float, hi: float, n: int) -> list[float]:
+    """對照組：**完全不看內容**，在 `lo`–`hi` 之間等距切 `n` 刀。
+
+    R30 的教訓是對照組**出錯**時會偽裝成「訊號不準」；R37 的教訓是它
+    **缺席**時，刀數密度給的分數會被讀成方法的效果。
+    """
+    if n <= 0 or hi <= lo:
+        return []
+    step = (hi - lo) / (n + 1)
+    return [lo + step * (i + 1) for i in range(n)]
+
+
+def tolerance_coverage(lo: float, hi: float, n: int, tol: float) -> float:
+    """切 `n` 刀時，`±tol` 的容忍窗**涵蓋掉多少比例的時間軸**。
+
+    接近 1 表示這個容忍窗**量不出東西**——任何刀都會落在某個窗裡，
+    分數主要由刀數決定而不是由切得準不準決定。
+
+    實測（R37）：`BOUNDARY_TOLERANCE_SEC = 20` 在現行分段密度下覆蓋
+    80–95%，±30s 覆蓋 100%。**這不是保守的容忍窗，是失效的容忍窗。**
+    """
+    if hi <= lo:
+        return 1.0
+    return min(1.0, 2 * tol * n / (hi - lo))
+
+
+def margin_over_uniform(
+    predicted: list[float],
+    ground_truth: list[float],
+    lo: float,
+    hi: float,
+    tolerance_sec: float = BOUNDARY_TOLERANCE_SEC,
+) -> tuple[float, float, float]:
+    """回傳 `(方法 F1, 等距對照組 F1, 覆蓋率)`。
+
+    **報 boundary F1 時要一起報這三個**。單獨的 F1 讀不出它有多少是
+    密度給的——R37 在 STEM 素材上量到 ±20s 的 F1 0.432 而等距是 0.459，
+    只看前者會得到「方法失效」；±10s 是 0.378 對 0.081，優勢 +0.30。
+    """
+    method = boundary_prf(predicted, ground_truth, tolerance_sec).f1
+    baseline = boundary_prf(
+        uniform_boundaries(lo, hi, len(predicted)), ground_truth, tolerance_sec
+    ).f1
+    return method, baseline, tolerance_coverage(lo, hi, len(predicted), tolerance_sec)
