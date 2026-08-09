@@ -273,6 +273,21 @@ def rule_08_chunk_metadata_complete(chunks: list[Chunk]) -> list[Violation]:
             )
         if not chunk.text.strip():
             out.append(Violation(8, "chunk metadata 完整", f"{chunk.id} 的 text 為空"))
+        # `content_sha` 存在但**沒人核對**的話，它就只是一個看起來很可靠
+        # 的字串——而下游正是要靠它判斷「id 沒變但內容變了」。
+        # §5.2 的十項門檻裡有 7 項只 assert 常數值，就是這樣爛掉的。
+        import hashlib
+
+        actual = hashlib.sha256(chunk.text.encode("utf-8")).hexdigest()[:16]
+        if chunk.metadata.content_sha != actual:
+            out.append(
+                Violation(
+                    8,
+                    "chunk metadata 完整",
+                    f"{chunk.id} 的 content_sha 與 text 不符"
+                    f"（記的是 {chunk.metadata.content_sha}，實際 {actual}）",
+                )
+            )
     return out
 
 

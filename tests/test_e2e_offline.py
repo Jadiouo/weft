@@ -93,6 +93,72 @@ def test_chunks_satisfy_all_invariants(offline_run):
     assert violations == [], "\n".join(str(v) for v in violations)
 
 
+def test_every_chunk_in_the_file_passed_provenance(offline_run):
+    """**`chunks.jsonl` 的契約**：檔案裡不存在溯源未通過的內容。
+
+    實測成立（票 13 逐支核對：23/23、46/46、44/44、53/53 對上
+    `provenance.jsonl` 的 `verified`），但那時它**只存在於程式碼裡**——
+    S6 的一個 `continue`。下游（vault ingest）要據此決定「不必自己再判斷
+    可信度」，那就必須是**被釘住的契約**，不是實作的巧合。
+
+    兩層過濾：未通過的 block 在 S6 被排除（§5.4）；
+    未過 per-video 閘門的影片整支不寫進檔案。這裡測第一層。
+    """
+    from weft.ir import VerificationStatus
+    from weft.stages.cloud import s6_render
+
+    cfg, ir, _transcript, work, out = offline_run
+    chunks = s6_render(cfg, ir, work, out)
+
+    verified_texts = {
+        block.text
+        for seg in ir.segments if seg.understanding
+        for block in seg.understanding.content_blocks
+        if block.verification is VerificationStatus.VERIFIED
+    }
+    rejected = {
+        block.text
+        for seg in ir.segments if seg.understanding
+        for block in seg.understanding.content_blocks
+        if block.verification is not None
+        and block.verification is not VerificationStatus.VERIFIED
+    }
+    assert verified_texts, "fixture 裡沒有任何通過溯源的 block，這條測不到東西"
+
+    # chunk 的 text 可能被 §4.9 切過，所以比對「是不是某個被拒 block 的開頭」
+    for chunk in chunks:
+        for bad in rejected:
+            assert not bad.startswith(chunk.text[:40]), (
+                f"{chunk.id} 的內容來自溯源未通過的 block——"
+                f"§5.4 說那些不得進入產品"
+            )
+
+
+def test_content_sha_lets_downstream_notice_that_a_stable_id_changed(offline_run):
+    """`id` 是**位置編號**（`<video>#<段序號>#b<塊序號>`）。
+
+    改 `block_chars`、換分段方法、換一版 S4c prompt——`#010` 還是 `#010`，
+    但指的時間範圍與內容整個換掉。這正是 D32：當時位置性讓 S4c 讀到
+    別的時間範圍的快取，而**所有機械檢查都是綠的**。D32 修的是快取鍵，
+    **匯出的 id 沒修**，所以同一個陷阱會跟著 chunk 進到 vault。
+
+    這裡不改 id 的形狀（要改成什麼得下游先決定用什麼當識別），
+    只保證**變了看得出來**。
+    """
+    from weft.stages.cloud import s6_render
+    from weft.stages.render import content_sha
+
+    cfg, ir, _transcript, work, out = offline_run
+    chunks = s6_render(cfg, ir, work, out)
+
+    for chunk in chunks:
+        assert chunk.metadata.content_sha == content_sha(chunk.text)
+
+    # 同一個 id 換掉內容 → sha 必須不同，否則這個欄位沒有用
+    victim = chunks[0]
+    assert content_sha(victim.text + "改過") != victim.metadata.content_sha
+
+
 def test_provenance_runs_and_fills_verdicts(offline_run):
     """§5.4 溯源檢查會就地填回每個 block 的判定與成因。
 

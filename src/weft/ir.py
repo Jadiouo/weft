@@ -380,6 +380,20 @@ class ChunkMetadata(Strict):
     slide_ref: str | None  # speaker_only 段落無投影片
     terms: list[str]
     provenance_kind: ProvenanceKind
+    #: `text` 的 sha256 前 16 碼。**下游用來偵測「id 沒變但內容變了」。**
+    #:
+    #: `Chunk.id` 是 `<video>#<段序號>#b<塊序號>`——**位置編號**。
+    #: 改 `block_chars`、換分段方法、甚至換一版 S4c prompt，
+    #: `#010` 都還是 `#010`，但它指的時間範圍與內容會整個換掉。
+    #:
+    #: 這正是 D32：當時 segment_id 的位置性讓 S4c 讀到別的時間範圍的快取，
+    #: 而**所有機械檢查都是綠的**。D32 修的是快取鍵；**匯出的 id 沒修**，
+    #: 於是同一個陷阱會原封不動地跟著 chunk 進到 vault ——
+    #: 以 id 當筆記識別的話，重跑一次就會在同一則筆記下換掉內容。
+    #:
+    #: 這裡不改 id 的形狀（那要下游先決定用什麼當識別），
+    #: 只保證**內容變了看得出來**。見票 13 的稽核。
+    content_sha: str
 
 
 class Chunk(Strict):

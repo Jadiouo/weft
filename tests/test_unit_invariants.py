@@ -20,6 +20,7 @@ from weft.ir import (
     ProvenanceKind,
     Transcript,
 )
+from weft.stages.render import content_sha
 from weft.validation import invariants as inv
 
 
@@ -67,6 +68,7 @@ def make_chunks(ir) -> list[Chunk]:
                 slide_ref=seg.slide_ref,
                 terms=seg.understanding.terms,
                 provenance_kind=block.provenance.kind,
+                content_sha=content_sha(block.text),
             ),
         )
     ]
@@ -216,6 +218,28 @@ def test_rule_08_allows_missing_slide_ref_for_transcript_provenance(legal_ir):
     chunks = make_chunks(ir)
     chunks[0].metadata.slide_ref = None
     chunks[0].metadata.provenance_kind = ProvenanceKind.TRANSCRIPT
+    assert inv.rule_08_chunk_metadata_complete(chunks) == []
+
+
+def test_rule_08_detects_content_sha_that_does_not_match_the_text(legal_ir):
+    """`content_sha` 的**全部價值**就是「內容變了看得出來」。
+
+    沒有這條反例，它就是一個沒人核對過的字串——下游會信它，
+    而它可以與 `text` 悄悄脫節。這個 repo 對「檢查存在 ≠ 檢查有效」
+    有三次前科（D30 / DANGLING_THRESHOLDS / §5.2 的 7 項空門檻）。
+    """
+    ir, _, _ = legal_ir
+    chunks = make_chunks(ir)
+    chunks[0].text = chunks[0].text + "後來被改掉的一句"
+    assert 8 in rules_hit(inv.rule_08_chunk_metadata_complete(chunks))
+
+
+def test_rule_08_accepts_a_matching_content_sha(legal_ir):
+    """反過來也要成立，否則上一條可以靠「永遠回報違規」通過。"""
+    ir, _, _ = legal_ir
+    chunks = make_chunks(ir)
+    chunks[0].text = "換了內容"
+    chunks[0].metadata.content_sha = content_sha("換了內容")
     assert inv.rule_08_chunk_metadata_complete(chunks) == []
 
 

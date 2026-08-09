@@ -7,6 +7,8 @@ markdown 裝飾。」
 
 from __future__ import annotations
 
+import hashlib
+
 import os
 
 import logging
@@ -121,10 +123,16 @@ def build_chunks(ir, cfg) -> tuple[list, list[str]]:
                             slide_ref=seg.slide_ref,
                             terms=seg.understanding.terms,
                             provenance_kind=block.provenance.kind,
+                            content_sha=content_sha(piece),
                         ),
                     )
                 )
     return chunks, warnings
+
+
+def content_sha(text: str) -> str:
+    """chunk 內文的短雜湊。位置編號的 `Chunk.id` 認不出內容換掉了，這個認得出。"""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
 
 
 def write_chunks(chunks: list, path: Path, video_id: str | None = None,
