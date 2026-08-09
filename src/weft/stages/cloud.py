@@ -423,7 +423,11 @@ def s6_render(cfg: Config, ir: VideoIR, work: WorkPaths, out: OutPaths) -> list[
     但每個切片都要複製完整 metadata。
     """
     from ..validation.provenance import check_video
-    from ..validation.thresholds import MAX_UNVERIFIED_RATIO, PROVENANCE_PER_VIDEO_GATE
+    from ..validation.thresholds import (
+        MAX_UNVERIFIED_RATIO,
+        MIN_CHARS_PER_1K_SOURCE,
+        PROVENANCE_PER_VIDEO_GATE,
+    )
     from .render import (
         build_chunks,
         drop_video_from_chunks,
@@ -442,7 +446,32 @@ def s6_render(cfg: Config, ir: VideoIR, work: WorkPaths, out: OutPaths) -> list[
     write_unverified(verdict, out.unverified)
     # **逐支記錄，不設門檻**（票 03）。閘門是下面那個 per-video 的判斷；
     # 這裡只是把數字與成因留下來，讓「整體趨勢」有東西可看。
-    write_provenance_record(verdict, out.provenance_log)
+    # 產出量要拿逐字稿當分母。S6 的簽名沒有 transcript，從 work 讀；
+    # **讀不到就只記速率、不設下限**——新增的觀測值不該讓整條路徑壞掉。
+    source_transcript = None
+    if work.transcript.exists():
+        from ..ir import Transcript
+
+        source_transcript = Transcript.model_validate_json(
+            work.transcript.read_text(encoding="utf-8"))
+    record = write_provenance_record(
+        verdict, out.provenance_log, ir, source_transcript)
+
+    # **產出量的災難下限。** 通過率上升有可能只是因為寫得比較少——
+    # 2026-08-09 實測 `depth_alpha` 一改，`2FjApOVIbUs` 的總字數掉 47%
+    # 而通過率從 0.979 升到 1.000。D31 的 `_MAX_BARREN_RATIO` 擋得住
+    # 「整段空白」，擋不住「每段都少寫一半」。
+    #
+    # 這**不是品質門檻**（各素材合理值差很多，實測 70–176 字/分），
+    # 是「S4c 幾乎沒在寫東西」的偵測器。
+    ratio = record.get("chars_per_1k_source")
+    if ratio is not None and ratio < MIN_CHARS_PER_1K_SOURCE:
+        raise RuntimeError(
+            f"S4c 產出量過低：每千字逐字稿只產出 {ratio} 字"
+            f"（下限 {MIN_CHARS_PER_1K_SOURCE}）。"
+            f"{record['segments']} 段產出 {record['blocks']} 個 block。"
+            f"**先確認 S4c 是不是幾乎沒回東西**，不要直接調低這個下限。"
+        )
 
     chunks, warnings = build_chunks(ir, cfg.s6)
     for warning in warnings:

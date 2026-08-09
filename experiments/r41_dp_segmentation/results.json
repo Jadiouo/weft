@@ -1,0 +1,242 @@
+[
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "黃金集（參考）",
+    "n": 10,
+    "n_truth": 10,
+    "window_diff": 0.0,
+    "f1_10s": 1.0,
+    "cv": 0.553,
+    "spread": 4.9
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "一刀不切",
+    "n": 0,
+    "n_truth": 10,
+    "window_diff": 0.451,
+    "f1_10s": 0.0,
+    "cv": 0.0,
+    "spread": 1.0
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "ngram α=+0.75（現行）",
+    "n": 9,
+    "n_truth": 10,
+    "window_diff": 0.36,
+    "f1_10s": 0.421,
+    "cv": 0.633,
+    "spread": 5.9
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "DP prior=0",
+    "n": 21,
+    "n_truth": 10,
+    "window_diff": 0.562,
+    "f1_10s": 0.452,
+    "cv": 0.685,
+    "spread": 11.3
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "DP prior=100",
+    "n": 3,
+    "n_truth": 10,
+    "window_diff": 0.519,
+    "f1_10s": 0.0,
+    "cv": 0.114,
+    "spread": 1.3
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "DP prior=200",
+    "n": 2,
+    "n_truth": 10,
+    "window_diff": 0.529,
+    "f1_10s": 0.0,
+    "cv": 0.237,
+    "spread": 1.6
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "DP prior=400",
+    "n": 1,
+    "n_truth": 10,
+    "window_diff": 0.403,
+    "f1_10s": 0.182,
+    "cv": 0.016,
+    "spread": 1.0
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "DP prior=800",
+    "n": 0,
+    "n_truth": 10,
+    "window_diff": 0.451,
+    "f1_10s": 0.0,
+    "cv": 0.0,
+    "spread": 1.0
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "黃金集（參考）",
+    "n": 15,
+    "n_truth": 15,
+    "window_diff": 0.0,
+    "f1_10s": 1.0,
+    "cv": 0.439,
+    "spread": 4.3
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "一刀不切",
+    "n": 0,
+    "n_truth": 15,
+    "window_diff": 0.464,
+    "f1_10s": 0.0,
+    "cv": 0.0,
+    "spread": 1.0
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "ngram α=+0.75（現行）",
+    "n": 15,
+    "n_truth": 15,
+    "window_diff": 0.359,
+    "f1_10s": 0.333,
+    "cv": 0.48,
+    "spread": 3.4
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "DP prior=0",
+    "n": 23,
+    "n_truth": 15,
+    "window_diff": 0.427,
+    "f1_10s": 0.526,
+    "cv": 0.719,
+    "spread": 30.5
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "DP prior=100",
+    "n": 4,
+    "n_truth": 15,
+    "window_diff": 0.448,
+    "f1_10s": 0.211,
+    "cv": 0.202,
+    "spread": 1.6
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "DP prior=200",
+    "n": 3,
+    "n_truth": 15,
+    "window_diff": 0.45,
+    "f1_10s": 0.0,
+    "cv": 0.092,
+    "spread": 1.3
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "DP prior=400",
+    "n": 2,
+    "n_truth": 15,
+    "window_diff": 0.419,
+    "f1_10s": 0.118,
+    "cv": 0.165,
+    "spread": 1.4
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "DP prior=800",
+    "n": 1,
+    "n_truth": 15,
+    "window_diff": 0.433,
+    "f1_10s": 0.125,
+    "cv": 0.044,
+    "spread": 1.1
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "黃金集（參考）",
+    "n": 17,
+    "n_truth": 17,
+    "window_diff": 0.0,
+    "f1_10s": 1.0,
+    "cv": 0.508,
+    "spread": 7.7
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "一刀不切",
+    "n": 0,
+    "n_truth": 17,
+    "window_diff": 0.467,
+    "f1_10s": 0.0,
+    "cv": 0.0,
+    "spread": 1.0
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "ngram α=+0.75（現行）",
+    "n": 34,
+    "n_truth": 17,
+    "window_diff": 0.562,
+    "f1_10s": 0.431,
+    "cv": 0.691,
+    "spread": 13.6
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "DP prior=0",
+    "n": 16,
+    "n_truth": 17,
+    "window_diff": 0.484,
+    "f1_10s": 0.242,
+    "cv": 0.867,
+    "spread": 47.8
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "DP prior=100",
+    "n": 5,
+    "n_truth": 17,
+    "window_diff": 0.403,
+    "f1_10s": 0.273,
+    "cv": 0.296,
+    "spread": 2.1
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "DP prior=200",
+    "n": 3,
+    "n_truth": 17,
+    "window_diff": 0.422,
+    "f1_10s": 0.2,
+    "cv": 0.037,
+    "spread": 1.1
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "DP prior=400",
+    "n": 2,
+    "n_truth": 17,
+    "window_diff": 0.426,
+    "f1_10s": 0.105,
+    "cv": 0.113,
+    "spread": 1.2
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "DP prior=800",
+    "n": 1,
+    "n_truth": 17,
+    "window_diff": 0.487,
+    "f1_10s": 0.0,
+    "cv": 0.068,
+    "spread": 1.1
+  }
+]

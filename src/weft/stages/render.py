@@ -212,7 +212,44 @@ def _lines_excluding_videos(path: Path, video_ids: set[str]) -> list[str]:
     return kept
 
 
-def write_provenance_record(verdict, path: Path) -> dict:
+def content_yield(ir, transcript=None) -> dict:
+    """S4c 到底寫了多少東西。**與分段方式無關的產出量指標。**
+
+    2026-08-09 實測到一件先前所有指標都看不見的事：把 `depth_alpha` 從
+    −0.5 調到 +0.75（分段品質大幅改善）之後，`2FjApOVIbUs` 的**總產出
+    字數掉了 47%**，而溯源通過率反而從 0.979 升到 **1.000**。
+
+    機制：**S4c 每段產出的 block 數與段落長短無關**（實測 1.2–1.9 個），
+    prompt 裡也沒有任何規定。段數砍半 → 內容砍半，而通過率因為分母變小
+    看起來更好。**D31 是同一個形狀**（prompt 改動讓 block 變少，
+    通過率上升），那次加的 `_MAX_BARREN_RATIO` 只擋得住「整段空白」，
+    擋不住「每段都少寫一半」。
+
+    這裡不設品質門檻——各素材的合理值差很多（實測 70–176 字/分）。
+    它是**趨勢觀測值**，配合 `MIN_CONTENT_CHARS_PER_MIN` 的災難下限。
+    """
+    segments = [s for s in ir.segments if s.understanding]
+    blocks = [b for s in segments for b in s.understanding.content_blocks]
+    produced = sum(len(b.text) for b in blocks)
+    minutes = max(1e-9, sum(s.t_end - s.t_start for s in ir.segments) / 60.0)
+
+    out = {
+        "segments": len(segments),
+        "blocks": len(blocks),
+        "blocks_per_segment": round(len(blocks) / len(segments), 2) if segments else 0.0,
+        "chars_per_min": round(produced / minutes, 1),
+    }
+    # **主指標是壓縮比，不是字/分。** 「每分鐘」是速率，短素材的分母太小
+    # 就沒有意義——實測 90 秒的合成 fixture 只有 19.3 字/分，而真實影片
+    # 是 70–281，兩者不可比。壓縮比與素材長短無關。
+    if transcript is not None:
+        source = sum(len(c.text_raw) for c in transcript.cues)
+        out["source_chars"] = source
+        out["chars_per_1k_source"] = round(produced / max(1, source) * 1000, 1)
+    return out
+
+
+def write_provenance_record(verdict, path: Path, ir=None, transcript=None) -> dict:
     """把一支影片的溯源量測寫進 `out/provenance.jsonl`。**沒有門檻。**
 
     §5.4 定義的閘門是 per-video 的；§5.2 的表格卻把同一個 0.95 寫成
@@ -239,6 +276,9 @@ def write_provenance_record(verdict, path: Path) -> dict:
             if not v.wrong_source and not v.depends_on_correction
         ]),
     }
+    # **產出量**。通過率上升有可能只是因為寫得比較少（見 `content_yield`）。
+    if ir is not None:
+        record.update(content_yield(ir, transcript))
     _rewrite_excluding(path, {verdict.video_id},
                        [json.dumps(record, ensure_ascii=False)])
     return record

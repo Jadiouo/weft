@@ -150,3 +150,46 @@ class TestAlphaIsWiredThrough:
 def test_no_crash_on_degenerate_scores(alpha):
     """全部相同的分數 → std=0。除以零或全切都不行。"""
     assert depth_cut_indices(np.full(50, 0.5), alpha) == []
+
+
+class TestAlphaIsInTheIdempotencyKey:
+    """**α 改了，S3 必須重跑。** 2026-08-09 實測踩到的。
+
+    `DEPTH_ALPHA` 原本是 `segment.py` 的模組常數，而 `stage_params()`
+    是拿 `cfg.s3` 算冪等鍵的——常數不在裡面。結果把 α 從 −0.5 改成
+    +0.75 之後跑 `weft prepare`，S3 被判定為「已完成」直接跳過，
+    `06_segments.json` 原封不動，**新設定悄悄沒生效**。
+
+    D20／D22／D30／D32 都是同一類：**冪等鍵沒有涵蓋所有決定結果的東西。**
+    這是第五次，所以這次留一條測試。
+    """
+
+    def test_depth_alpha_lives_in_s3_config(self):
+        from weft.config import Config
+
+        assert hasattr(Config().s3, "depth_alpha"), (
+            "α 不在 S3Config 裡 → 不在冪等鍵裡 → 改了不會重跑"
+        )
+
+    def test_changing_alpha_changes_the_stage_params(self):
+        """真正要守的是這件事，不是欄位存不存在。"""
+        from weft.config import Config
+        from weft.pipeline import stage_params
+        from weft.state import Stage
+
+        a = Config()
+        b = Config()
+        b.s3.depth_alpha = a.s3.depth_alpha + 1.0
+        assert (stage_params(a, Stage.S3_ALIGN)
+                != stage_params(b, Stage.S3_ALIGN)), (
+            "改了 α，S3 的參數指紋卻沒變——S3 會被跳過"
+        )
+
+    def test_the_two_copies_of_the_constant_agree(self):
+        """`segment.DEPTH_ALPHA` 與 `S3Config.depth_alpha` 是同一個數字。
+
+        兩份會漂開，而漂開時 `segment.py` 的 docstring 與實際行為就對不上。
+        """
+        from weft.config import Config
+
+        assert DEPTH_ALPHA == Config().s3.depth_alpha

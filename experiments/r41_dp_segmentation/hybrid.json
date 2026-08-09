@@ -1,0 +1,122 @@
+[
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "黃金集（參考）",
+    "n": 10,
+    "n_truth": 10,
+    "window_diff": 0.0,
+    "f1_10s": 1.0,
+    "cv": 0.553,
+    "spread": 4.9
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "ngram α=+0.75（現行）",
+    "n": 9,
+    "n_truth": 10,
+    "window_diff": 0.36,
+    "f1_10s": 0.421,
+    "cv": 0.633,
+    "spread": 5.9
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "DP 全域（prior=0）",
+    "n": 21,
+    "n_truth": 10,
+    "window_diff": 0.562,
+    "f1_10s": 0.452,
+    "cv": 0.685,
+    "spread": 11.3
+  },
+  {
+    "video_id": "cxrqHABhWOU",
+    "label": "**混合：ngram 候選 + DP**",
+    "n": 14,
+    "n_truth": 10,
+    "window_diff": 0.503,
+    "f1_10s": 0.25,
+    "cv": 0.552,
+    "spread": 5.6
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "黃金集（參考）",
+    "n": 15,
+    "n_truth": 15,
+    "window_diff": 0.0,
+    "f1_10s": 1.0,
+    "cv": 0.439,
+    "spread": 4.3
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "ngram α=+0.75（現行）",
+    "n": 15,
+    "n_truth": 15,
+    "window_diff": 0.359,
+    "f1_10s": 0.333,
+    "cv": 0.48,
+    "spread": 3.4
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "DP 全域（prior=0）",
+    "n": 23,
+    "n_truth": 15,
+    "window_diff": 0.427,
+    "f1_10s": 0.526,
+    "cv": 0.719,
+    "spread": 30.5
+  },
+  {
+    "video_id": "2FjApOVIbUs",
+    "label": "**混合：ngram 候選 + DP**",
+    "n": 14,
+    "n_truth": 15,
+    "window_diff": 0.422,
+    "f1_10s": 0.138,
+    "cv": 0.45,
+    "spread": 5.9
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "黃金集（參考）",
+    "n": 17,
+    "n_truth": 17,
+    "window_diff": 0.0,
+    "f1_10s": 1.0,
+    "cv": 0.508,
+    "spread": 7.7
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "ngram α=+0.75（現行）",
+    "n": 34,
+    "n_truth": 17,
+    "window_diff": 0.562,
+    "f1_10s": 0.431,
+    "cv": 0.691,
+    "spread": 13.6
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "DP 全域（prior=0）",
+    "n": 16,
+    "n_truth": 17,
+    "window_diff": 0.484,
+    "f1_10s": 0.242,
+    "cv": 0.867,
+    "spread": 47.8
+  },
+  {
+    "video_id": "UiKi5-Arce4",
+    "label": "**混合：ngram 候選 + DP**",
+    "n": 11,
+    "n_truth": 17,
+    "window_diff": 0.426,
+    "f1_10s": 0.214,
+    "cv": 0.539,
+    "spread": 11.5
+  }
+]

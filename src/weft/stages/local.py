@@ -255,7 +255,8 @@ def s3_align(
         method = BoundaryMethod.SLIDE_SWITCH
     else:
         cuts = enforce_min_length(
-            topic_boundaries(transcript.cues, p.block_chars, p.block_window),
+            topic_boundaries(transcript.cues, p.block_chars, p.block_window,
+                             p.depth_alpha),
             candidates.duration, p.min_segment_sec)
         windows = topic_windows(cuts, candidates.duration, candidates.candidates)
         method = BoundaryMethod.TOPIC_SHIFT

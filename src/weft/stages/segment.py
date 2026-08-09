@@ -56,7 +56,8 @@ import numpy as np
 #:
 #: 這個值改動會讓所有 segment_id 位移 → S4c 快取全部失效（D32）。
 #: 改之前先看 `experiments/r40_granularity/REPORT.md`。
-DEPTH_ALPHA: float = 0.75
+#: 與 `S3Config.depth_alpha` 共用同一個數字——**兩份會漂開**。
+from ..config import _DEPTH_ALPHA_DEFAULT as DEPTH_ALPHA  # noqa: E402
 
 log = logging.getLogger(__name__)
 

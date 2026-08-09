@@ -107,6 +107,10 @@ class S1cConfig(StageConfig):
     max_group_ratio: float = 0.9
 
 
+#: R40 選出的預設值。定義在此是為了讓 `segment.py` 與設定共用同一個數字。
+_DEPTH_ALPHA_DEFAULT: float = 0.75
+
+
 class S3Config(StageConfig):
     """分段。SDD §4.6（v0.5 改寫：職責從「對齊」變成「分段」）。
 
@@ -139,6 +143,14 @@ class S3Config(StageConfig):
     block_chars: int = 40
     #: TextTiling 的左右比較視窗（幾個 block）。**完全沒掃過。**
     block_window: int = 3
+    #: 深度門檻 `cutoff = µ + α·σ` 的 α。R40 在調校集選出 +0.75；
+    #: Hearst 1997 的原始 −0.5 在三支真實影片上**都輸給「一刀不切」**。
+    #:
+    #: **這個欄位必須留在 S3Config 裡**，不能當模組常數——`stage_params()`
+    #: 拿 `cfg.s3` 算冪等鍵，常數不在裡面，改了它 S3 會被判定為「已完成」
+    #: 而跳過，於是新設定悄悄不生效（實測踩過）。
+    #: D20／D22／D30／D32 是同一類：**冪等鍵要涵蓋所有決定結果的東西。**
+    depth_alpha: float = _DEPTH_ALPHA_DEFAULT
 
 
 class S4aConfig(StageConfig):
