@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import contextlib
+
 import json
 import logging
 
@@ -82,6 +84,41 @@ def _record_skip(out: OutPaths, video_id: str, reason: str) -> None:
     out.skip_list.write_text(json.dumps(skips, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+@contextlib.contextmanager
+def _stage(stage: "Stage"):
+    """把階段內拋出的例外包成 `StageFailure`，記下是哪一個階段。
+
+    `VideoUnavailable` 不包——`run_prepare` 對它有專門的處置
+    （記進 skip list 而不是算成失敗，§4.1）。
+    """
+    from .stages.fetch import VideoUnavailable
+
+    try:
+        yield
+    except (VideoUnavailable, StageFailure):
+        raise
+    except Exception as exc:
+        raise StageFailure(stage, exc) from exc
+
+
+class StageFailure(Exception):
+    """帶著**真正失敗的那個階段**往上拋。
+
+    原本 `run_prepare` 的例外處理寫死 `state.mark_failed(Stage.S0_FETCH, ...)`，
+    所以不管哪個階段爆掉都記成「S0 取得失敗」。實測 Whisper 的
+    `CUDA failed with error out of memory`（S1a）被記成 S0——
+    查問題的人會去看下載，而下載完全正常。
+
+    **錯誤訊息指錯地方比沒有錯誤訊息更糟**：它會主動把人帶往錯的方向
+    （D29 的行號 bug 是同一類）。
+    """
+
+    def __init__(self, stage: "Stage", cause: BaseException):
+        super().__init__(f"{stage.value}：{cause}")
+        self.stage = stage
+        self.cause = cause
+
+
 def prepare_one(
     video_id: str,
     cfg: Config,
@@ -89,7 +126,10 @@ def prepare_one(
     episode_index: int | None = None,
     force: bool = False,
 ) -> VideoState:
-    """跑單支影片的 S0–S3。每個階段各自檢查是否可跳過（§6.3）。"""
+    """跑單支影片的 S0–S3。每個階段各自檢查是否可跳過（§6.3）。
+
+    任一階段失敗時包成 `StageFailure` 往上拋，**帶著那個階段的身分**。
+    """
     from .stages import local
 
     work = WorkPaths(cfg.work_dir, video_id)
@@ -104,7 +144,8 @@ def prepare_one(
     if satisfied(Stage.S0_FETCH) and work.meta.exists():
         meta = VideoMeta.model_validate_json(work.meta.read_text(encoding="utf-8"))
     else:
-        meta = local.s0_fetch(video_id, cfg, work)
+        with _stage(Stage.S0_FETCH):
+            meta = local.s0_fetch(video_id, cfg, work)
         if series_id or episode_index:
             meta = meta.model_copy(update={"series_id": series_id, "episode_index": episode_index})
             work.meta.write_text(meta.model_dump_json(indent=2), encoding="utf-8")
@@ -143,7 +184,8 @@ def prepare_one(
         candidates = CandidateSet.model_validate_json(work.candidates.read_text(encoding="utf-8"))
         slides = _slides_from(work, candidates)
     else:
-        candidates, slides = local.s1b_slides(cfg, work)
+        with _stage(Stage.S1B_SLIDES):
+            candidates, slides = local.s1b_slides(cfg, work)
         state.mark_done(Stage.S1B_SLIDES, stage_params(cfg, Stage.S1B_SLIDES))
         state.save(work.state)
 
@@ -151,7 +193,8 @@ def prepare_one(
     if satisfied(Stage.S1C_DEDUP) and work.dedup.exists():
         _apply_dedup(work, slides)
     else:
-        stats = dedup.s1c_dedup(cfg, work, slides, candidates)
+        with _stage(Stage.S1C_DEDUP):
+            stats = dedup.s1c_dedup(cfg, work, slides, candidates)
         work.dedup.write_text(json.dumps(
             {"stats": stats,
              "slides": {s.slide_id: {"duplicate_of": s.duplicate_of,
@@ -165,13 +208,15 @@ def prepare_one(
     if satisfied(Stage.S1A_TRANSCRIPT) and work.transcript.exists():
         transcript = Transcript.model_validate_json(work.transcript.read_text(encoding="utf-8"))
     else:
-        transcript = local.s1a_transcript(cfg, work)
+        with _stage(Stage.S1A_TRANSCRIPT):
+            transcript = local.s1a_transcript(cfg, work)
         state.mark_done(Stage.S1A_TRANSCRIPT, stage_params(cfg, Stage.S1A_TRANSCRIPT))
         state.save(work.state)
 
     # ---- S3 對齊 ----
     if not satisfied(Stage.S3_ALIGN):
-        local.s3_align(cfg, work, transcript, candidates)
+        with _stage(Stage.S3_ALIGN):
+            local.s3_align(cfg, work, transcript, candidates)
         state.mark_done(Stage.S3_ALIGN, stage_params(cfg, Stage.S3_ALIGN))
         state.save(work.state)
 
@@ -279,13 +324,24 @@ def run_prepare(target: str, cfg: Config, force: bool = False) -> int:
             # §4.2／§4.3：單支失敗標記 failed 並繼續——批次跑數十支時，
             # 中途失敗是常態而非例外（§2.1 原則四）
             failed += 1
-            log.exception("%s 處理失敗，繼續下一支：%s", video_id, exc)
+            # **記在真正失敗的那個階段上。** 原本寫死 S0，於是 Whisper 的
+            # CUDA OOM 被記成「下載失敗」——查問題的人會去看下載，而下載
+            # 完全正常。認不出階段時才退回 S0，並在訊息裡說明。
+            stage = exc.stage if isinstance(exc, StageFailure) else Stage.S0_FETCH
+            detail = str(exc.cause) if isinstance(exc, StageFailure) else str(exc)
+            log.exception("%s 在 %s 失敗，繼續下一支：%s", video_id, stage.value, detail)
             work = WorkPaths(cfg.work_dir, video_id)
             state = VideoState.load_or_new(work.state, video_id)
-            state.mark_failed(Stage.S0_FETCH, str(exc))
+            state.mark_failed(stage, detail)
             state.save(work.state)
 
-    log.info("prepare 完成：%d 支目標，%d 支失敗", len(targets), failed)
+    if failed:
+        # **有失敗就要在最後一行看得到。** 批次跑數十支時，中途的
+        # log.exception 早就被沖掉了，而收尾那一行是唯一會被讀的東西。
+        log.error("prepare 完成：%d 支目標，**%d 支失敗**（見各支的 state.json）",
+                  len(targets), failed)
+    else:
+        log.info("prepare 完成：%d 支目標，全部成功", len(targets))
     return 1 if failed == len(targets) and targets else 0
 
 
