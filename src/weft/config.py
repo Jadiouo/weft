@@ -263,7 +263,7 @@ class S4Config(StageConfig):
     #: v3（2026-08-06）：拆出 S4a 後，本階段不再負責 is_slide 與 slide_text。
     #: **改了 prompt 就必須改這個**——否則舊快取會被當成新結果讀回來。
     #: v0.3 首跑的 07_understanding 是 v1，帶著 30.6% 的圖片錯位。
-    prompt_version: str = "v8"
+    prompt_version: str = "v7"
     #: 可將 2–3 個相鄰 segment 併為一次呼叫，但輸出仍逐 segment 分開
     batch_segments: int = 3
     prev_summary_max_chars: int = 200
