@@ -1,42 +1,59 @@
-# 15 — `series_id` / `episode_index` 沒有流到 chunk
+# 15 — `series_id` / `episode_index`：**前提是錯的，實際缺陷是回填**
 
-**要做出什麼：** playlist 來源的 chunk，metadata 帶得出「哪個系列、第幾集」。
+**Status:** done（2026-08-13）
 
-**Blocked by：** —
+## 原本寫的（錯的）
 
-**Status:** ready-for-agent
+> 票 04 給 `VideoProfile` 加了 `series_id`，但**它沒有流到 chunk**。
+> `ir.meta.series_id` 讀的是 `VideoMeta`，那是 S0 從**單支影片**建的。
+> 兩個 `series_id` 是不同的東西，名字一樣。
 
-**來源：** 票 13 的稽核（`experiments/r38_chunk_contract_audit/REPORT.md` §4）。
-**不在 v0.5 收尾範圍**，是回報出來的後續票。
+**查完發現這條鏈本來就是通的**：
 
-## 現況
+```
+resolve_targets(target)                  → [(video_id, series_id, episode_index)]
+  → prepare_one(video_id, cfg, series_id, episode_index)
+    → VideoMeta.series_id / episode_index
+      → build_chunks → ChunkMetadata.series_id / episode_index
+```
 
-`out/chunks.jsonl` 166 筆，`series_id` 與 `episode_index` **0/166 有值**。
+八支素材是 `None`，只因為當初**都用單支 video_id 抓的**——
+那時 `None` 是**正確**的值，不是缺失。
 
-票 04 給 `VideoProfile` 加了 `series_id`，但 chunk 讀的是
-`ir.meta.series_id`（`VideoMeta`），而 `VideoMeta` 是 S0 從**單支影片**建的。
-兩個 `series_id` 是不同的東西，名字一樣。
+## 實際的缺陷：回填不會發生
 
-SDD §7.5 把這兩欄列為 v2 預留，`_CHUNK_NULLABLE_FIELDS` 因此允許它們是 null——
-所以**現在沒有任何測試會紅**。
+```python
+if satisfied(Stage.S0_FETCH) and work.meta.exists():
+    meta = VideoMeta.model_validate_json(...)   # 直接讀舊的
+else:
+    meta = local.s0_fetch(...)
+    if series_id or episode_index:              # ← 只有這條路會蓋
+```
 
-## 為什麼值得做
+一支影片**先以單支 id 抓過、之後再用 playlist 跑**時，S0 是「已滿足」的，
+那段程式碼整段跳過，`series_id` 永遠補不上。
 
-vault 側要按系列分組。標題裡有集數
-（「古典醫學之人體設計系列-**27**胰腺」），但要靠字串解析，
-而那正是當初把欄位獨立出來的理由。
+而重抓影片沒有理由（檔案就在那），所以這**不是快取失效問題，
+是旁路資訊沒有回填**。
 
-## 要注意的
+## 已做
 
-- `weft prepare` 吃單支 id 與 playlist 兩種輸入，**只有後者有這個資訊**。
-  單支輸入時 null 是正確的，不要為了填滿而猜。
-- 標題解析是**最後手段**，不是主要來源：「27」是集數還是別的數字，
-  換一個系列就不一定了（v0.2 與 v0.4 的錯誤都是「一支影片的觀察推廣到整個系列」）。
-- 補上之後要順手檢查 `_CHUNK_NULLABLE_FIELDS`：playlist 來源時它們
-  **不該**還是 nullable，否則又是一個「檢查存在但不檢查有效」。
+把回填移出 `else`，兩條路都補，並且：
 
-## 驗收
+- **只在值真的不同時才寫檔**（無謂的寫入會讓 mtime 變，混淆事後追查）
+- **不觸發重抓**（有測試釘住）
 
-- [ ] playlist 來源跑完後，chunk 的 `series_id` / `episode_index` 有值
-- [ ] 單支 id 來源仍為 null，且**有測試釘住這個差別**
-- [ ] 有一條反例測試：playlist 來源卻是 null 時會紅
+`tests/test_unit_series_metadata.py`，6 條，含兩條容易漏的：
+
+- **單支來源時 `None` 是正確的**——沒有這條，「補上系列資訊」很容易被
+  實作成從標題猜。「古典醫學之人體設計系列-**27**胰腺」裡的 27 是不是
+  集數，換一個系列就不一定了（v0.2／v0.4 兩次栽在這類推廣）。
+- **鏈的最後一段** `VideoMeta` → `ChunkMetadata`——中間斷掉的話，
+  前面全綠而 vault 仍然拿不到。
+
+拿掉回填會讓 3 條轉紅，驗過。
+
+## 沒做
+
+**沒有把既有八支的 `series_id` 補上。** 那需要用 playlist URL 重跑
+`weft prepare`，會打網路。現在管線支援了，下次用 playlist 跑就會有值。

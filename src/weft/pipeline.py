@@ -146,11 +146,24 @@ def prepare_one(
     else:
         with _stage(Stage.S0_FETCH):
             meta = local.s0_fetch(video_id, cfg, work)
-        if series_id or episode_index:
-            meta = meta.model_copy(update={"series_id": series_id, "episode_index": episode_index})
-            work.meta.write_text(meta.model_dump_json(indent=2), encoding="utf-8")
         state.mark_done(Stage.S0_FETCH, stage_params(cfg, Stage.S0_FETCH))
         state.save(work.state)
+
+    # **系列資訊要在兩條路上都補**（票 15，2026-08-13）。
+    #
+    # 原本只在「剛抓下來」那條路蓋。後果：一支影片若先以單支 id 抓過，
+    # 之後再用 playlist 跑，`series_id` **永遠補不上**——S0 已滿足，
+    # 那段程式碼根本不執行，而重抓影片沒有理由（檔案就在那）。
+    #
+    # 這不是快取失效問題（S0 的產物確實沒變），是**旁路資訊沒有回填**。
+    if (series_id or episode_index) and (
+        meta.series_id != series_id or meta.episode_index != episode_index
+    ):
+        meta = meta.model_copy(
+            update={"series_id": series_id, "episode_index": episode_index})
+        work.meta.write_text(meta.model_dump_json(indent=2), encoding="utf-8")
+        log.info("S0 %s：補上系列資訊 series_id=%s episode_index=%s",
+                 video_id, series_id, episode_index)
 
     # ---- S-1 素材勘查（v0.4：**逐支跑**，§4.0）----
     # 與 S1b 共用抽幀，邊際成本接近零。實測同一個播放清單的第 14、27 集
