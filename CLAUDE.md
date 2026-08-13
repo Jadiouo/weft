@@ -23,7 +23,7 @@
 ~/miniconda3/envs/pipe-gpu/bin/python     # GPU 工作
 
 # 測試。**預設就是離線的**——不需要網路、雲端額度、或本地模型服務。
-# 乾淨機器上實測 616 passed / 5 skipped / 0 failed，19 秒。
+# 乾淨機器上實測 628 passed / 5 skipped / 0 failed，19 秒。
 ~/miniconda3/envs/pipe-cpu/bin/python -m pytest tests/ -q
 
 # 需要外部資源的那一層（下載影片 + 本地 ollama）。**手動跑。**
@@ -60,7 +60,7 @@ tests/test_e2e_pipeline.py::test_slide_classification_on_real_videos
 
 回來時比對這四個數字：**一樣就是沒退步，變了才要查**。
 它需要 `work/` 下的快取產物；乾淨機器上這條會 skip，全套是
-**616 passed / 5 skipped / 0 failed**（有 `work/` 時 620 passed / 1 failed）。
+**628 passed / 5 skipped / 0 failed**（有 `work/` 時 632 passed / 1 failed）。
 
 ### 第二條要盯的：分段（2026-08-09 起）
 
@@ -102,6 +102,11 @@ STEM 那支目前仍未修好（票 16），見 known-risks R33。
 > 呼叫模型；10 段的影片約 10 分鐘。
 
 分段那一層不受影響——它是在已快取的逐字稿上做確定性計算。
+
+> **而且要驗「它真的做了那件事」的正面訊號**（R37）。實測踩過兩次：
+> `>/dev/null 2>&1` 吞掉 `ollama` 沒開的錯誤，量測讀到沒動過的舊檔，
+> 三次「完全相同」看起來剛好像我預期的結論。
+> 檢查 `10/10 個 segment` 出現、檢查快取檔真的寫出來、失敗就中止。
 
 ---
 
