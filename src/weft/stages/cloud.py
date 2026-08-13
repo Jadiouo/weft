@@ -183,7 +183,7 @@ def s4_understand(
 
             results.append(understanding)
             prev_summary = understanding.summary[: p.prev_summary_max_chars]
-            _save(work, seg, understanding)
+            _save(work, seg, understanding, p.temperature)
 
     confirmed = sum(1 for u in results if u.is_slide)
     corrected = sum(len(u.corrections) for u in results)
@@ -306,6 +306,12 @@ def _load_cached(work: WorkPaths, segment: Segment, cfg) -> Understanding | None
         return None
     if cached.model_used != cfg.model or cached.prompt_version != cfg.prompt_version:
         return None
+    if cached.temperature != cfg.temperature:
+        # 舊快取沒有這個欄位（None）時也走這裡——**保守地重跑**，
+        # 理由與下面的指紋相同：不能相信一個無法驗證的假設。
+        log.info("%s 的取樣溫度變了（%s → %s），重跑",
+                 segment.segment_id, cached.temperature, cfg.temperature)
+        return None
     fingerprint = segment_fingerprint(segment)
     if cached.input_fingerprint != fingerprint:
         # 舊快取沒有這個欄位（None）時也走這裡——**保守地重跑**。
@@ -316,9 +322,11 @@ def _load_cached(work: WorkPaths, segment: Segment, cfg) -> Understanding | None
     return cached
 
 
-def _save(work: WorkPaths, segment: Segment, understanding: Understanding) -> None:
+def _save(work: WorkPaths, segment: Segment, understanding: Understanding,
+          temperature: float | None = None) -> None:
     """每 segment 一檔，便於斷點續跑（§3.1、§6.3）。"""
     understanding.input_fingerprint = segment_fingerprint(segment)
+    understanding.temperature = temperature
     path = work.understanding(_index_of(work, segment))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(understanding.model_dump_json(indent=2), encoding="utf-8")

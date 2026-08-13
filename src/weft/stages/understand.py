@@ -326,7 +326,8 @@ def call_model(
                         seg_id_of(segments, image_key), image_key)
             parts.append(Part(text="（這一段的代表畫面檔案遺失，請當作沒有畫面處理。）"))
 
-    result = generate(cfg.model, SYSTEM_PROMPT, parts, RESPONSE_SCHEMA)
+    result = generate(cfg.model, SYSTEM_PROMPT, parts, RESPONSE_SCHEMA,
+                      temperature=cfg.temperature)
     return BatchResult(
         per_segment={s["segment_id"]: s for s in result.payload.get("segments", [])},
         input_tokens=result.input_tokens,

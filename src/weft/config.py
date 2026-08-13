@@ -264,6 +264,14 @@ class S4Config(StageConfig):
     #: **改了 prompt 就必須改這個**——否則舊快取會被當成新結果讀回來。
     #: v0.3 首跑的 07_understanding 是 v1，帶著 30.6% 的圖片錯位。
     prompt_version: str = "v7"
+    #: 取樣溫度。**0.2 是 2026-08-13 之前寫死在 `providers.generate()` 的預設值**，
+    #: 沒有人量過它的後果——實測同設定重跑五次，總產出字數 600–1386
+    #: （CV 0.34、全距 2.31 倍），單一樣本的粗略 95% 區間是 294–1533（R44）。
+    #:
+    #: **這個欄位必須進逐段快取鍵**（`_load_cached`），不然改了不會重跑，
+    #: 新設定悄悄不生效。α 剛踩過同一個坑，那是這類的第五次
+    #: （D20／D22／D30／D32／α）。
+    temperature: float = 0.2
     #: 可將 2–3 個相鄰 segment 併為一次呼叫，但輸出仍逐 segment 分開
     batch_segments: int = 3
     prev_summary_max_chars: int = 200
