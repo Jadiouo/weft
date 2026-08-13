@@ -1064,7 +1064,7 @@ D5），而這兩者正是真實素材上失敗的直接原因——
 | 術語校正 precision | 黃金集 | **≥ 0.90** | 寧可漏改，不可亂改 |
 | 術語校正 recall | 黃金集 | 記錄但不設硬門檻 | 首版求穩 |
 | 對齊邊界誤差中位數 | 黃金集 | **≤ 5 秒** | |
-| 溯源通過率 | **單支影片** | **≥ 0.95** | `PROVENANCE_PER_VIDEO_GATE`。低於此值整支 `needs_review`，不進 `chunks.jsonl`。見 §5.4 |
+| 溯源通過率 | **單支影片** | ~~≥ 0.95~~ **只記錄** | `PROVENANCE_PER_VIDEO_GATE`。**D34 起不再是閘門**——低於此值標 `needs_review`，但已驗證的 block 照樣輸出，chunk 帶 `video_pass_rate`。見 §5.4 |
 | 溯源通過率（跨影片合計） | 全部 | **無門檻，只記錄** | `provenance_rate_overall`，寫在 `out/provenance.jsonl`。見下方說明 |
 
 **v0.4 的三點說明：**
@@ -1132,7 +1132,13 @@ VLM——浪費額度但輸出正確。**多併一張（recall 低）會讓一�
 > **這是保護強度的實質下降，不是等價替換。** 補救選項見 §9 的 R9。
 
 - 相似度 < 門檻 → 標記為 `unverified`
-- 每支影片 `unverified` 比例 > 5% → 整支標記為 `needs_review`，不進入 `chunks.jsonl`
+- 每支影片 `unverified` 比例 > 5% → 整支標記為 `needs_review`
+  > **v0.5（D34，2026-08-13）：`needs_review` 不再擋 `chunks.jsonl`。**
+  > 未通過的 block 由上一條逐塊排除；per-video 這一層原本是「整支丟掉」，
+  > 實測 8 支素材時它**丟掉的已驗證內容（218 block）比留下的（135）還多**。
+  > 改為：所有已驗證的 block 都輸出，而 `ChunkMetadata.video_pass_rate`
+  > 帶上該支的通過率，讓下游自己決定信任門檻。
+  > `needs_review` 保留為標記，仍寫進 `out/provenance.jsonl`。
 - 所有 `unverified` 條目寫入 `out/debug/unverified.jsonl` 供人工檢視
 
 **反向檢查（同樣重要）**：若 `content_block` 與來源的相似度**過高**（例如 > 0.98 的逐字複製率超過 80% 的 blocks），代表 LLM 只是在複製貼上而沒有理解與整合。

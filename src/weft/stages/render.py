@@ -124,6 +124,10 @@ def build_chunks(ir, cfg) -> tuple[list, list[str]]:
                             terms=seg.understanding.terms,
                             provenance_kind=block.provenance.kind,
                             content_sha=content_sha(piece),
+                            video_pass_rate=(
+                                None if ir.unverified_ratio is None
+                                else round(1.0 - ir.unverified_ratio, 4)
+                            ),
                         ),
                     )
                 )

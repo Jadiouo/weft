@@ -481,22 +481,24 @@ def s6_render(cfg: Config, ir: VideoIR, work: WorkPaths, out: OutPaths) -> list[
         write_debug_markdown(ir, work, out.debug_md(ir.meta.video_id))
 
     if ir.needs_review:
-        # §5.4：unverified 比例 > 5% → 整支標記 needs_review，**不進 chunks.jsonl**
+        # **D34：這裡不再丟掉整支影片。** 未通過的 block 已由 `build_chunks`
+        # 逐塊排除（§5.4 第一層）；per-video 這一層原本是「整支丟掉」，
+        # 而實測 8 支素材時它丟掉的已驗證內容（218 block）比留下的（135）還多。
+        #
+        # 改為大聲記錄 + 把通過率寫進每個 chunk 的 metadata，
+        # 讓下游自己決定信任門檻。理由與代價見 docs/decisions.md D34。
         log.error(
-            "S6 %s：溯源未通過比例 %.1f%%（上限 %.0f%%），整支標記 needs_review，"
-            "不寫入 chunks.jsonl。請查看 %s",
+            "S6 %s：溯源未通過比例 %.1f%%（標記門檻 %.0f%%），整支標記 "
+            "needs_review。**已驗證的 block 仍會輸出**，chunk 的 "
+            "video_pass_rate=%.3f。請查看 %s",
             work.video_id, ir.unverified_ratio * 100,
-            MAX_UNVERIFIED_RATIO * 100, out.debug_md(ir.meta.video_id),
+            MAX_UNVERIFIED_RATIO * 100, 1.0 - ir.unverified_ratio,
+            out.debug_md(ir.meta.video_id),
         )
-        # **上一版的 chunk 不得留在產品輸出裡。** 這支影片剛被判定不可信，
-        # 而它可能在上一次（門檻不同、prompt 不同、溯源基準不同）通過過。
-        # 只是「不寫入」的話，知識庫裡會留著一份沒有人再為它背書的內容。
-        drop_video_from_chunks(out.chunks, ir.meta.video_id)
-        return []
 
     written = write_chunks(chunks, out.chunks, video_id=ir.meta.video_id)
     overall = overall_provenance_rate(out.provenance_log)
-    log.info("S6 %s：寫出 %d 個 chunk（本支溯源 %.1f%%，閘門 %.0f%%）；"
+    log.info("S6 %s：寫出 %d 個 chunk（本支溯源 %.1f%%，標記門檻 %.0f%%）；"
              "累計 %d 支、整體 %.1f%%（**只是趨勢，不是驗收門檻**）",
              work.video_id, written, verdict.pass_rate * 100,
              PROVENANCE_PER_VIDEO_GATE * 100, overall["videos"],

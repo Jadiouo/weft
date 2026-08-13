@@ -245,7 +245,12 @@ def rule_07_provenance_not_null(ir: VideoIR) -> list[Violation]:
 #:     playlist）來源時本就無值。
 #:   - slide_ref：speaker_only 段落沒有投影片。改以條件檢查涵蓋——
 #:     provenance_kind 為 slide_ocr 時 slide_ref 必須有值。
-_CHUNK_NULLABLE_FIELDS = frozenset({"series_id", "episode_index", "slide_ref"})
+#: `video_pass_rate` 在此的理由與其他三個不同：那三個是 v2 預留欄位，
+#: 這個是**「溯源還沒跑」時的誠實表示**。填 1.0 會讓「沒檢查過」看起來
+#: 像「完美通過」。生產路徑一定會有值（`s6_render` 先跑 `check_video`），
+#: 由 `test_unit_render.py` 釘住。
+_CHUNK_NULLABLE_FIELDS = frozenset({"series_id", "episode_index", "slide_ref",
+                                    "video_pass_rate"})
 
 
 def rule_08_chunk_metadata_complete(chunks: list[Chunk]) -> list[Violation]:

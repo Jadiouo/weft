@@ -69,6 +69,7 @@ def make_chunks(ir) -> list[Chunk]:
                 terms=seg.understanding.terms,
                 provenance_kind=block.provenance.kind,
                 content_sha=content_sha(block.text),
+                video_pass_rate=1.0,
             ),
         )
     ]

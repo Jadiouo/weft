@@ -422,21 +422,27 @@ def out_paths(tmp_path):
     out.ensure_dirs()
     return out
 
-def test_needs_review_removes_previously_written_chunks(legal_ir, tmp_path, out_paths, monkeypatch):
-    """影片被 §5.4 擋下時，**上一版的 chunk 不得留在產品輸出裡**。
+def test_needs_review_no_longer_removes_chunks_but_stamps_the_rate(
+    legal_ir, tmp_path, out_paths, monkeypatch
+):
+    """**D34 改掉了這條測試原本守的行為，所以它改成守新的。**
 
-    情境是真的會發生的：某支第一次跑通過、chunk 進了 chunks.jsonl；
-    之後改了 prompt 或溯源基準（票 01 就是），通過率掉到門檻以下 →
-    log 印「不寫入 chunks.jsonl」，但舊的內容原封不動留著。
-    那比重複更糟——一支已被判定不可信的影片，繼續用上一版的內容
-    留在知識庫裡，而且沒有任何一步會發現。
+    原本：影片被 §5.4 擋下 → 整支的 chunk 從 `chunks.jsonl` 移除。
+    現在：**已驗證的 block 照樣輸出**，而每個 chunk 帶上 `video_pass_rate`。
+
+    為什麼改：實測 8 支素材，per-video 閘門丟掉的已驗證內容
+    （218 block）比留下的（135）還多。未通過的 block 本來就由
+    `build_chunks` 逐塊排除，這一層擋的是好內容。見 D34。
+
+    **原本那條測試守的問題並沒有消失**——「上一版的 chunk 留在輸出裡」
+    仍然不可接受，只是現在的處置是覆寫而不是移除。
+    下面第二段就是在守這件事。
     """
     import json
 
-    from weft.stages.cloud import s6_render
-
     from weft.config import Config
     from weft.paths import WorkPaths
+    from weft.stages.cloud import s6_render
 
     ir, _transcript, base = legal_ir
     cfg = Config()
@@ -450,16 +456,27 @@ def test_needs_review_removes_previously_written_chunks(legal_ir, tmp_path, out_
 
     chunks = s6_render(cfg, ir, work, out)
     assert chunks and out.chunks.exists()
+    assert all(c.metadata.video_pass_rate is not None for c in chunks), (
+        "生產路徑一定先跑 check_video，`video_pass_rate` 不該是 None"
+    )
 
-    # 讓這支影片這次過不了閘門
+    # 讓這支影片這次被標記
     monkeypatch.setattr("weft.validation.thresholds.MAX_UNVERIFIED_RATIO", -1.0)
     monkeypatch.setattr("weft.validation.provenance.MAX_UNVERIFIED_RATIO", -1.0)
-    assert s6_render(cfg, ir, work, out) == []
+    again = s6_render(cfg, ir, work, out)
 
-    rows = [json.loads(x) for x in out.chunks.read_text(encoding="utf-8").splitlines() if x.strip()]
-    assert not [r for r in rows if r["metadata"]["video_id"] == ir.meta.video_id], (
-        "被擋下的影片仍有 chunk 留在 chunks.jsonl"
+    assert again, "被標記 needs_review 的影片仍應輸出已驗證的 block（D34）"
+    assert ir.needs_review, "標記本身要留著——它降級為記錄，不是被刪掉"
+
+    rows = [json.loads(x) for x in out.chunks.read_text(encoding="utf-8").splitlines()
+            if x.strip()]
+    mine = [r for r in rows if r["metadata"]["video_id"] == ir.meta.video_id]
+    assert mine, "被標記的影片的 chunk 應該在檔案裡"
+    assert len(mine) == len(again), (
+        f"重跑後檔案裡有 {len(mine)} 筆、本次產出 {len(again)} 筆——"
+        f"**上一版沒有被覆寫掉**。那正是原本那條測試守的問題。"
     )
+    assert all(r["metadata"]["video_pass_rate"] is not None for r in mine)
 
 
 def test_other_videos_survive_a_blocked_rerun(out_paths):
