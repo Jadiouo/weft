@@ -272,6 +272,14 @@ class S4Config(StageConfig):
     #: 新設定悄悄不生效。α 剛踩過同一個坑，那是這類的第五次
     #: （D20／D22／D30／D32／α）。
     temperature: float = 0.2
+    #: 取樣種子。`None` = 不指定（ollama 每次自己選）。
+    #: **這才是為「重現同一次生成」設計的機制**，而 R44／R45 都漏了它——
+    #: R44 §7 只提了溫度，R45 試了 `temperature=0.0` 而變異仍在（CV 0.42）。
+    seed: int | None = None
+    #: 取樣時只看機率最高的 k 個 token。`None` = 用 ollama 的預設（40）。
+    #: `top_k=1` 是貪婪解碼——`temperature=0` 沒讓輸出確定，
+    #: 有可能是因為這個參數從沒被設過。
+    top_k: int | None = None
     #: 可將 2–3 個相鄰 segment 併為一次呼叫，但輸出仍逐 segment 分開
     batch_segments: int = 3
     prev_summary_max_chars: int = 200

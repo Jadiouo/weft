@@ -69,7 +69,8 @@ def split_spec(spec: str) -> tuple[str, str]:
 
 
 def generate(spec: str, system: str, parts: list[Part], schema: dict,
-             temperature: float = 0.2, num_ctx: int | None = None) -> Result:
+             temperature: float = 0.2, num_ctx: int | None = None,
+             seed: int | None = None, top_k: int | None = None) -> Result:
     """依規格字串分派到對應的供應者。回傳解析後的 JSON。
 
     **JSON 解析失敗時拋例外**，由呼叫端的 `with_retries` 處理——
@@ -78,7 +79,8 @@ def generate(spec: str, system: str, parts: list[Part], schema: dict,
     provider, model = split_spec(spec)
     if provider == "gemini":
         return _gemini(model, system, parts, schema, temperature)
-    return _ollama(model, system, parts, schema, temperature, num_ctx)
+    return _ollama(model, system, parts, schema, temperature, num_ctx,
+                   seed=seed, top_k=top_k)
 
 
 def _gemini(model: str, system: str, parts: list[Part], schema: dict,
@@ -124,7 +126,8 @@ OLLAMA_URL = "http://localhost:11434/api/chat"
 
 
 def _ollama(model: str, system: str, parts: list[Part], schema: dict,
-            temperature: float, num_ctx: int | None) -> Result:
+            temperature: float, num_ctx: int | None,
+            seed: int | None = None, top_k: int | None = None) -> Result:
     import base64
 
     import requests
@@ -144,6 +147,10 @@ def _ollama(model: str, system: str, parts: list[Part], schema: dict,
         "options": {
             "temperature": temperature,
             "num_ctx": num_ctx or OLLAMA_NUM_CTX.get(model, DEFAULT_NUM_CTX),
+            # **只在有值時才送**——送 None 會被 ollama 當成明確設定，
+            # 而我們要的是「沿用它的預設」。
+            **({"seed": seed} if seed is not None else {}),
+            **({"top_k": top_k} if top_k is not None else {}),
         },
     })
     response.raise_for_status()

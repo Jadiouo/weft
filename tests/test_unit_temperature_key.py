@@ -22,12 +22,21 @@ import pytest
 from weft.config import Config
 
 
-def _understanding(temperature, model="ollama:qwen2.5:14b", version="v7"):
+def _understanding(temperature, model="ollama:qwen2.5:14b", version="v7",
+                   fingerprint="__compute__"):
+    """快取檔的替身。`fingerprint` 預設用該溫度算出來的真值。"""
+    from weft.config import Config
     from weft.ir import Understanding
+    from weft.stages.cloud import sampling_fingerprint
 
+    if fingerprint == "__compute__":
+        cfg = Config().s4
+        cfg.temperature = temperature
+        fingerprint = None if temperature is None else sampling_fingerprint(cfg)
     return Understanding(
         summary="s", model_used=model, prompt_version=version,
         input_fingerprint="fp", temperature=temperature,
+        sampling_fingerprint=fingerprint,
     )
 
 

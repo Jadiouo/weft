@@ -183,7 +183,7 @@ def s4_understand(
 
             results.append(understanding)
             prev_summary = understanding.summary[: p.prev_summary_max_chars]
-            _save(work, seg, understanding, p.temperature)
+            _save(work, seg, understanding, p)
 
     confirmed = sum(1 for u in results if u.is_slide)
     corrected = sum(len(u.corrections) for u in results)
@@ -295,6 +295,30 @@ def segment_fingerprint(segment: Segment) -> str:
     return h.hexdigest()[:16]
 
 
+def sampling_fingerprint(cfg) -> str:
+    """所有影響取樣的參數的指紋。**加新參數只要改這裡。**
+
+    這個 repo 已經六次因為「冪等鍵沒涵蓋某個決定結果的東西」而量出
+    假結論（D20／D22／D30／D32／`DEPTH_ALPHA`／`temperature`）。
+    逐個欄位比對的寫法要求每次加參數都記得改比對邏輯——
+    **那個「記得」遲早會失效**，而失效的症狀是「改了沒效果」，
+    最難察覺。
+
+    `tests/test_unit_sampling_fingerprint.py` 釘住「每個取樣參數都要
+    讓指紋改變」，用的是反射而不是硬編清單——**新加的欄位自動被涵蓋**。
+    """
+    import hashlib
+
+    parts = "|".join(
+        f"{name}={getattr(cfg, name, None)!r}" for name in SAMPLING_PARAMS)
+    return hashlib.sha256(parts.encode("utf-8")).hexdigest()[:16]
+
+
+#: 影響取樣結果的設定欄位。**新增取樣參數時要加進來**，
+#: 而 `test_unit_sampling_fingerprint.py` 會檢查沒有漏掉。
+SAMPLING_PARAMS: tuple[str, ...] = ("temperature", "seed", "top_k")
+
+
 def _load_cached(work: WorkPaths, segment: Segment, cfg) -> Understanding | None:
     """讀取既有結果。冪等鍵含 prompt_version、model **與輸入指紋**（§4.7）。"""
     path = work.understanding(_index_of(work, segment))
@@ -306,11 +330,13 @@ def _load_cached(work: WorkPaths, segment: Segment, cfg) -> Understanding | None
         return None
     if cached.model_used != cfg.model or cached.prompt_version != cfg.prompt_version:
         return None
-    if cached.temperature != cfg.temperature:
+    want = sampling_fingerprint(cfg)
+    if cached.sampling_fingerprint != want:
         # 舊快取沒有這個欄位（None）時也走這裡——**保守地重跑**，
-        # 理由與下面的指紋相同：不能相信一個無法驗證的假設。
-        log.info("%s 的取樣溫度變了（%s → %s），重跑",
-                 segment.segment_id, cached.temperature, cfg.temperature)
+        # 理由與下面的輸入指紋相同：不能相信一個無法驗證的假設。
+        log.info("%s 的取樣參數變了（%s → %s，溫度 %s → %s），重跑",
+                 segment.segment_id, cached.sampling_fingerprint, want,
+                 cached.temperature, cfg.temperature)
         return None
     fingerprint = segment_fingerprint(segment)
     if cached.input_fingerprint != fingerprint:
@@ -323,10 +349,12 @@ def _load_cached(work: WorkPaths, segment: Segment, cfg) -> Understanding | None
 
 
 def _save(work: WorkPaths, segment: Segment, understanding: Understanding,
-          temperature: float | None = None) -> None:
+          cfg=None) -> None:
     """每 segment 一檔，便於斷點續跑（§3.1、§6.3）。"""
     understanding.input_fingerprint = segment_fingerprint(segment)
-    understanding.temperature = temperature
+    if cfg is not None:
+        understanding.temperature = cfg.temperature
+        understanding.sampling_fingerprint = sampling_fingerprint(cfg)
     path = work.understanding(_index_of(work, segment))
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(understanding.model_dump_json(indent=2), encoding="utf-8")
