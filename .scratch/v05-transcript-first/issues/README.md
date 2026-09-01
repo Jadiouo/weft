@@ -51,6 +51,7 @@
 | 14 | [[探索] 階層式分段](14-treeseg-exploration.md) | 08 | **不在收尾範圍**（FROZEN F5）|
 | 15 | [`series_id`：前提錯了，實際缺陷是回填](15-series-id-propagation.md) | — | **完成**（2026-08-13）|
 | 16 | [STEM 分段仍輸給不分段](16-stem-segmentation.md) | 需更多標註 | R40／R41 的後續，**不在收尾範圍** |
+| 17 | [無人執行：整批跑播放清單](17-batch-unattended.md) | — | **v1 收尾條件**（使用者定）|
 
 ## 狀態（2026-08-09）
 
