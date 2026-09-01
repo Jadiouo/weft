@@ -122,10 +122,23 @@ def test_video_unavailable_is_not_wrapped(tmp_path, monkeypatch):
         raise VideoUnavailable("私人影片")
 
     monkeypatch.setattr("weft.stages.local.s0_fetch", unavailable)
-    assert run_prepare(_VID, cfg) == 0, "不可用的影片不算失敗"
+    rc = run_prepare(_VID, cfg)
 
+    # **這條原本守的東西**：不可用不得被包成 `StageFailure`，而且要進 skip list。
     skips = json.loads((cfg.out_dir / "skiplist.json").read_text(encoding="utf-8"))
     assert _VID in skips
+    state = VideoState.load_or_new(WorkPaths(cfg.work_dir, _VID).state, _VID)
+    assert not [s for s, r in state.stages.items() if r.status is StageStatus.FAILED], (
+        "不可用不是階段失敗——§4.1 對它有專門處置"
+    )
+
+    # **但回傳值改了（2026-09-01）。** 原本斷言 `== 0`（「不算失敗」），
+    # 而那讓「一支都沒成功」看起來像成功。實測踩到：整批 26 支有 23 支
+    # 下載 403、全部走這條路，收尾卻印「全部成功」。
+    #
+    # 「不算失敗」講的是**不要當成階段失敗**（上面兩條在守），
+    # 不是「要回報成功」。什麼都沒產出時 exit code 必須說得出來。
+    assert rc == 1, "一支目標、一支不可用、零產出——不該回報成功"
 
 
 def test_success_leaves_no_failed_stage(tmp_path, monkeypatch):

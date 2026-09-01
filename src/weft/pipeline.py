@@ -322,17 +322,21 @@ def run_prepare(target: str, cfg: Config, force: bool = False) -> int:
     targets = resolve_targets(target)
     skips = _load_skiplist(out)
 
-    failed = 0
+    succeeded = failed = 0
+    skipped_known = skipped_unavailable = 0
     for video_id, series_id, episode_index in targets:
         if video_id in skips:
             log.info("%s 在 skip list 中（%s），跳過", video_id, skips[video_id])
+            skipped_known += 1
             continue
         try:
             prepare_one(video_id, cfg, series_id, episode_index, force=force)
+            succeeded += 1
         except VideoUnavailable as exc:
             # §4.1：影片不可用 → 記入 skip list，繼續下一支
             log.warning("%s 不可用，記入 skip list：%s", video_id, exc)
             _record_skip(out, video_id, str(exc))
+            skipped_unavailable += 1
         except Exception as exc:  # noqa: BLE001
             # §4.2／§4.3：單支失敗標記 failed 並繼續——批次跑數十支時，
             # 中途失敗是常態而非例外（§2.1 原則四）
@@ -348,14 +352,27 @@ def run_prepare(target: str, cfg: Config, force: bool = False) -> int:
             state.mark_failed(stage, detail)
             state.save(work.state)
 
-    if failed:
-        # **有失敗就要在最後一行看得到。** 批次跑數十支時，中途的
-        # log.exception 早就被沖掉了，而收尾那一行是唯一會被讀的東西。
-        log.error("prepare 完成：%d 支目標，**%d 支失敗**（見各支的 state.json）",
-                  len(targets), failed)
+    # **收尾那一行是唯一會被讀的東西**，所以它必須誠實地拆開四類。
+    #
+    # 2026-09-01 實測踩到：26 支裡 23 支下載 403，全部走 `VideoUnavailable`
+    # → 記進 skip list。而舊版只數 `failed`，skip 不算，於是印出
+    # 「26 支目標，全部成功」——**無人執行的第一次就對人說謊**。
+    #
+    # 第二個洞同樣嚴重：已在 skip list 裡的影片在 `try` 之前就 `continue`，
+    # 兩邊都不計，所以**重跑一次會什麼都不做然後再說一次「全部成功」**。
+    summary = (f"prepare 完成：{len(targets)} 支目標 → "
+               f"{succeeded} 成功、{skipped_unavailable} 不可用、"
+               f"{skipped_known} 已在 skip list、{failed} 失敗")
+    if targets and succeeded == 0:
+        # **一支都沒成功**——不管原因是什麼，這都不是「完成」。
+        log.error("%s。**沒有任何一支成功**，請先查原因再重跑"
+                  "（下載被擋、網路、磁碟都可能）", summary)
+    elif failed or skipped_unavailable or skipped_known:
+        log.error("%s。**不是全部都進來了**（見 out/skiplist.json 與各支 state.json）",
+                  summary)
     else:
-        log.info("prepare 完成：%d 支目標，全部成功", len(targets))
-    return 1 if failed == len(targets) and targets else 0
+        log.info("%s", summary)
+    return 1 if targets and succeeded == 0 else 0
 
 
 def _ready_for_understanding(cfg: Config) -> list[str]:
