@@ -91,6 +91,14 @@ STEM 那支目前仍未修好（票 16），見 known-risks R33。
 要再往上得開 `--remote-components ejs:github`——執行期從 GitHub 下載並
 執行腳本，**刻意不開**，見 `docs/FROZEN.md` F10。
 
+> **下載全部 403 時，第一件事是 `pip install -U yt-dlp`。**
+> 2026-09-01 實測：26 支有 23 支 403，根因是 yt-dlp 2026.07.04 用的
+> `ANDROID_VR` client 被 YouTube 擋了；升到 2026.08.19（改用 `visionos`）
+> 就解了，**不需要開遠端元件**。
+>
+> 症狀很會騙人：**metadata 拿得到、媒體下載才 403**，所以
+> `--simulate` 測起來是好的。我因此誤判成執行環境問題一次。
+
 ---
 
 ## 跑任何「改了有沒有效」的量測之前

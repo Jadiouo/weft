@@ -194,6 +194,37 @@ DocWhisper 用的就是 prompt，只是逐句局部而非全域。
 重測若仍無改善），先量「同一張投影片在 720p 與 1080p 下的 CER 差多少」，
 再決定要不要為此接受遠端元件。**不要為了消掉一個警告就開它。**
 
+### 2026-09-01 更新：問題升級成「完全下載不了」，但**升級 yt-dlp 就解了**
+
+整批跑機器人學播放清單時，26 支有 **23 支 `HTTP Error 403: Forbidden`**。
+
+診斷過程（每一步都排除一個候選）：
+
+| 測試 | 結果 |
+|---|---|
+| 沙箱內 `weft prepare` | ✗ 403 |
+| 沙箱外 `yt-dlp --simulate`（只抓 metadata）| ✓ 成功 ← **這一步讓我誤判成「沙箱問題」** |
+| 沙箱外**真的下載** | ✗ 403（媒體網址 `googlevideo.com`）|
+| `player_client=web / web_safari / mweb` | ✗ Requested format is not available |
+| `player_client=tv` | ✗ The page needs to be reloaded |
+| **yt-dlp 2026.07.04 → 2026.08.19** | ✓ **成功** |
+
+**根因**：舊版用 `ANDROID_VR` client，YouTube 把它的媒體網址 403 掉了。
+其他 client 全都要 PO token（就是本條凍結的那個 JS challenge）。
+新版改用 `visionos` client，**繞過去了，不需要開 `--remote-components`**。
+
+> **這條凍結因此仍然成立**，而且理由更強：**先升 yt-dlp，不要先開遠端元件。**
+
+**格式清單變了**：新版沒有合併好的格式（舊的 itag 18），只有分開的
+video-only + audio-only，要 ffmpeg 合併。現行的
+`bestvideo[height<=1080]+bestaudio/best[height<=1080]` 本來就走合併路徑，
+**不用改**。最高仍是 720p，與上表一致。
+
+> **給下一個撞到 403 的人**：
+> **先 `pip install -U yt-dlp`。** YouTube 每隔幾週就改一次，
+> 而症狀是「metadata 拿得到、媒體下載 403」——很容易被誤判成網路或環境問題
+> （我就誤判了一次，還把它連到別的事故上）。
+
 ---
 
 ## F9：懸空門檻（`DANGLING_THRESHOLDS`）

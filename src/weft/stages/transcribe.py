@@ -106,7 +106,24 @@ def whisper_transcribe(video: Path, cfg, initial_prompt: str | None) -> list[tup
     失敗行為（§4.2）：OOM → 降 batch size 重試一次 → 仍失敗則往上拋，
     由呼叫端標記該影片 failed 並繼續下一支。
     """
-    from faster_whisper import WhisperModel
+    try:
+        from faster_whisper import WhisperModel
+    except ImportError as exc:  # pragma: no cover —— 環境問題，離線測不到
+        # **錯誤訊息指錯地方比沒有錯誤訊息更糟**（D29、`test_unit_pipeline.py`）。
+        # `No module named 'faster_whisper'` 不會告訴你要換 conda 環境，
+        # 而這台機器上 `pipe-cpu` 沒有 torch、`pipe-gpu` 才有（見 CLAUDE.md）。
+        #
+        # 2026-09-01 實測踩到：整批 prepare 用 `pipe-cpu` 跑，
+        # 有字幕的影片沒事，**沒字幕的全部在 S1a 掛掉**——
+        # 而那正是這批素材唯一的逐字稿來源。
+        import sys
+
+        raise RuntimeError(
+            f"faster-whisper 不在目前的 Python 環境裡（{sys.prefix}）。"
+            f"**沒有字幕的影片只能靠它**，所以這一步無法降級跳過。\n"
+            f"這台機器上 `pipe-cpu` 沒有 torch，要用 `pipe-gpu`：\n"
+            f"  conda run -n pipe-gpu weft -c configs/local.yaml prepare <target>"
+        ) from exc
 
     p = cfg.s1a
     attempts = [
