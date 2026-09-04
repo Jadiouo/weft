@@ -1,122 +1,227 @@
 # weft
 
-把 YouTube 上的中文講經／授課影片系列，批次轉換成可檢索、可溯源的結構化
-知識庫，輸出為向量庫可直接匯入的 JSONL。
+把 YouTube 上的中文講課／講經影片系列，批次轉成**可檢索、可溯源**的逐字稿
+檔案庫——每一段都能回溯到影片的秒數。
 
-**規格見 [`SDD.md`](SDD.md)。動工前請先讀完第 5 章「驗證」——它刻意排在
-第 6 章「實作」之前。**
+> **v1 已封版（2026-09-04）。** 交付的是**逐字稿檔案庫**，不是知識庫。
+> 這個區別是刻意的，理由見 [`docs/v1-scope.md`](docs/v1-scope.md)。
 
 ---
 
-## 現況
+## 這個東西實際做了什麼
 
-SDD §4 的十個階段全部實作完成。
+先講**它沒做的**，因為那比較容易被誤會：
 
-```
-$ pytest -m "not gpu and not quota"
-323 passed, 3 skipped
-```
+- **它沒有改進語音辨識。** 31 支素材裡有 27 支的逐字稿文字是
+  **未經任何修改的 Whisper 輸出**（實測 `corrections` = 0）。
+- **它不是通用工具。** v1 的契約是產物導向——這 31 支的產出。
+  它能跑別的播放清單，但沒有為此驗收過。
+- **它不做 Obsidian 整合**，雖然產出最終要進 vault。
 
-3 個 skip 是等真實影片黃金集（§5.1 B）的門檻，**不是假通過**——skip 會
-出現在報告裡。
+它做的是這些：
 
-| 階段 | SDD | 狀態 |
-|---|---|---|
-| S0 取得 | §4.1 | ✅ 真實影片實跑通過 |
-| S1a 逐字稿 | §4.2 | ✅ 手動字幕優先，Whisper 備援 |
-| S1b 投影片候選幀 | §4.3 | ✅ 合成素材 F1 = 1.000（門檻 0.95）｜⚠️ 真實素材見 R8 |
-| S2 OCR | §4.4 | ✅ 直排中文信心 0.98–1.00 |
-| S2b 術語詞庫 | §4.4 | ✅ 系列級累積 |
-| S2c 術語校正 | §4.5 | ✅ precision = 1.000（門檻 0.90） |
-| S3 對齊 | §4.6 | ✅ 合成素材邊界位移 0.0s |
-| S4 聯合理解 | §4.7 | ⏳ 已實作，待 `GEMINI_API_KEY` 驗證 |
-| S5 全片統整 | §4.8 | ⏳ 同上 |
-| S6 渲染 | §4.9 | ✅ 不需 API 的部分已驗證 |
-
-### 驗證框架（SDD 第 5 章）
-
-| 項目 | 狀態 |
+| | 為什麼 `yt-dlp \| whisper` 不等於它 |
 |---|---|
-| 合成測試影片 A1–A7 | ✅ 7 支／943 秒／17 秒可重建 |
-| §5.3 不變量（10 條） | ✅ 每條皆有反例，且在**真實管線輸出**上驗證 |
-| §5.2 指標 | ✅ |
-| §5.4 溯源檢查 | ✅ 正向／反向／具名實體 |
-| §5.5 禁止捷徑護欄 | ✅ 自動檢查 13 條中的 7 條 |
-| §5.1(B) 真實影片黃金集 | ❌ **未標註**，工具已備（見下） |
+| **人工字幕優先** | 31 支裡 4 支有人工字幕。直接餵 Whisper 會把乾淨的字幕重聽一遍，**變差** |
+| **主題分段** | Whisper 給的是 cue（一句一句）。weft 產出 1,459 個**主題段落**，並且拿「一刀不切」當免費下界量過——**三支黃金集裡贏兩支、輸一支**（見下）|
+| **可續跑的階段機** | 每個階段有冪等鍵。參數變了會正確重跑，中斷可續。26 支無人跑 95 分鐘 |
+| **會說實話的回報** | 批次結束時印的數字必須兩種結果都印對過。曾經有一次 23/26 下載失敗卻印「全部成功」——那條訊息現在有 5 條測試守著 |
+| **驗證框架** | 649 條測試、9 支合成影片、5 支人工標註的真實黃金集 |
 
-### 需要你決定的事
+### 實際規模
 
-1. **`docs/known-risks.md` R8：真實素材的畫面結構與 SDD §1.3 不符。**
-   實測 zIglvjoU9vo 有 81% 是固定攝影棚機位（講者始終在畫面中），
-   而非 §1.3 描述的「全螢幕講者 ↔ 全螢幕投影片硬切」；另有 §1.3 未提及的
-   「半透明疊加」模式。這影響 §4.3 的分類設計，**我沒有單方面修改**。
-
-2. **黃金集標註**（§5.1 B，每支約 30 分鐘）。工具見
-   `tests/golden/annotate.py`。在 R8 釐清「什麼算一次換頁」之前，標註的
-   定義本身還不明確。
-
-3. **Gemini API key**：S4–S6 需要 `GEMINI_API_KEY`（AI Studio free tier）。
+```
+31 支影片 · 428,725 字逐字稿 · 48,393 個時間戳 · 1,459 個主題分段
+```
 
 ---
 
-## 環境
+## 這個 repo 真正的產出，可能是它記下的「什麼行不通」
 
-SDD §8 要求兩個 conda 環境，皆已建立：
+兩週的開發留下 **D1–D36 的決策紀錄**（`docs/decisions.md`）與
+**R1–R39 的風險紀錄**（`docs/known-risks.md`）。裡面大部分是**負面結果**，
+每一條都有實測，而它們不會出現在任何論文裡：
 
-```bash
-# pipe-cpu：S0、S1b、S3(部分)、S6
-conda create -n pipe-cpu python=3.11 -y
-conda run -n pipe-cpu pip install -e ".[dev]"
+| | 實測結論 | 出處 |
+|---|---|---|
+| **本地 LLM 的跑次變異** | 同設定重跑五次，總產出字數 600–1386，**CV 0.34** | 風險 R36、`experiments/r44_run_variance/` |
+| **貪婪解碼救不了** | `temperature=0 + top_k=1` 在**單一 process 內**確定，跨 process 無效；`seed` 完全沒有作用 | `experiments/r46_determinism/` |
+| **不要用 boundary F1 評分段** | 同一批改動在 ±10s F1 上 0.429→0.421（幾乎不動），在 WindowDiff 上是 0.529→0.360 | 風險 R30、`experiments/r37_segmentation_tolerance/` |
+| **Hearst 1997 的原始參數輸給不分段** | 加一條「一刀不切」的免費下界，才發現 α=−0.5 在三支素材上**全輸** | 風險 R33、`experiments/r40_granularity/` |
+| **溯源檢查量錯了東西** | §5.4 量的是 Source Faithfulness（照著來源講了沒），不是 World Factuality（講的是不是真的）。Whisper 把「座標」聽成「做標」而模型自己改對了，**檢查判它溯不到——我們在懲罰模型做對事** | `experiments/r39_homophone_diagnosis/` §3.1、`docs/v1-scope.md` §5.1 |
+| **「沒有錯誤訊息」不等於「成功了」** | `>/dev/null 2>&1` 吞掉 ollama 沒開的錯誤，量測讀到沒動過的舊檔，三次「完全相同」**剛好像我預期的結論** | 風險 R37 |
+| **糾錯掛錯了層** | 它掛在「理解」，而它修的是「逐字稿」。實測：人工字幕 4 支修了 16 筆，Whisper 27 支 **0 筆**——方向完全反了 | 風險 R39 |
 
-# pipe-gpu：S1a、S2、S3、S4 fallback
-conda create -n pipe-gpu python=3.11 -y
-conda run -n pipe-gpu pip install torch --index-url https://download.pytorch.org/whl/cu128
-conda run -n pipe-gpu pip install -e ".[dev,gpu]"
+> **編號有兩套，會撞號。** `docs/known-risks.md` 的 `R<n>` 與
+> `experiments/r<n>_*/` 的 `r<n>` 是**各自獨立**的序號——
+> 例如風險 R39 是「糾錯掛錯層」，而實驗 r39 是同音字診斷。
+> 引用時請連目錄名一起寫。
+---
+
+## 這個專案最重要的一條紀律
+
+> **未驗證的假設，和實測過的事實，在文件裡必須長得不一樣。**
+
+這個 repo 的歷史上，同一個錯誤犯過四次，每次都是把假設寫成前提：
+
+| | 從 | 推廣到 | 後果 |
+|---|---|---|---|
+| v0.2 | 單支影片的觀察 | 整個系列 | chunk 內容變成攝影棚背板裝飾字，**而所有機械檢查全綠** |
+| v0.4 | 第 1 集的 profile | 第 14 集 | 背景換了，分界值失效 |
+| R20 | 一次 `initial_prompt` 實驗 | 「解碼層沒用」 | 與已發表的 14.3% 改善矛盾，後由 D33 改寫 |
+| R26 | 調校集拿到 1.000 | 「判準成立」 | 保留集揭穿：那是素材的統計巧合 |
+
+所以：**實測過的標出處**（`D<n>`、`R<n>`、實驗路徑），
+**沒實測的明寫「假設，未驗證」**。不確定的數字不寫進表格裡當事實。
+
+### 一個具體的例子
+
+測試套件裡有**一條刻意留著的紅燈**：
+
+```
+tests/test_e2e_pipeline.py::test_slide_classification_on_real_videos
+  2FjApOVIbUs[保留集] 0.909 ／ C_CFyilE-ks[調校集] 0.947
+  cxrqHABhWOU[調校集] 1.000 ／ zIglvjoU9vo[調校集] 0.864     門檻 0.95
 ```
 
-SDD §8 的兩個雷都已避開並驗證：PyTorch 從官方 index 裝（`2.11.0+cu128`，
-sm_120 實跑通過）、ffmpeg 用系統 apt 版（`/usr/bin/ffmpeg` 6.1.1）。
-第三個雷是實作時才發現的：PaddleOCR 必須關閉 oneDNN，且要用 CPU 版
-paddle 3.x（見 `docs/decisions.md` D10）。
+**它不是壞掉的測試。** 改 prompt 的措辭已經到頂，再調就是對黃金集過擬合。
+把它藏到 marker 後面就會變成「只 assert 常數值」的同類——
+**綠燈製造「有人管」的錯覺**。回來時比對這四個數字：一樣就是沒退步。
 
-## 用法
+同理，分段那條測試**是綠的，但它印出來的第三行是輸的**：
 
-```bash
-weft synth                      # 產生 A1–A7 合成測試影片
-weft prepare <playlist|video>   # S0–S3，本地，不花額度
-weft understand                 # S4–S6，消耗 Gemini 額度，用盡自動停
-weft status                     # 掃描 work/，列出各影片的階段完成狀態
+```
+tests/test_e2e_pipeline.py::test_segmentation_beats_not_segmenting_at_all
+  cxrqHABhWOU  一刀不切 0.451 / 現行 0.360   贏
+  2FjApOVIbUs  一刀不切 0.464 / 現行 0.359   贏
+  UiKi5-Arce4  一刀不切 0.467 / 現行 0.562   **輸**    ← STEM 素材
 ```
 
-`prepare` / `understand` 分離對應 SDD §6.4：前者可先把整個 playlist 處理完
-囤在硬碟，後者每天按額度消化，額度重置時工作已就緒。
+（WindowDiff，**越低越好**。）「一刀不切」是免費的下界——
+**贏不過它就是在做負功**。輸的那支是 STEM 中英混合素材，**目前仍未修好**，
+硬需求是再標兩支黃金集。三個數字都釘在測試裡，退步（曾經贏的變成輸）
+或漂移超過 0.01 都會紅。
 
-## 測試
+---
+
+## 跑起來
 
 ```bash
-pytest -m "not gpu and not quota"   # 日常（約 45 秒）
-pytest -m synth                     # 只跑合成影片相關
-pytest -m golden                    # 真實影片黃金集
-pytest                              # 全部（需 GPU 與 API key）
+# 需要 Python ≥ 3.11 與 ffmpeg。
+pip install -e ".[dev]"
+
+# 沒有人工字幕的影片需要 faster-whisper（含 torch，建議獨立環境）：
+pip install -e ".[gpu]"
 ```
+
+> 這個 repo 沒有 `environment.yml`。開發機上用的是兩個 conda 環境
+> （`pipe-cpu` 主要、`pipe-gpu` 跑 Whisper），細節見 [`CLAUDE.md`](CLAUDE.md)。
+
+```bash
+# 抓取 + 逐字稿 + 分段（S0–S3）。這是 v1 的交付範圍。
+weft -c configs/local.yaml prepare "<playlist-or-video-url>"
+
+# 理解 + 溯源 + 渲染（S4–S6）。**不在 v1 交付範圍內**，需要本地 ollama。
+weft -c configs/local.yaml understand <video_id>
+```
+
+沒有人工字幕的影片需要 `faster-whisper`（`[gpu]` 那組相依）。
+**沒裝時它不會默默降級跳過**——會直接說缺什麼、以及該換哪個環境。
+
+### 測試
+
+```bash
+# 預設層。**離線** —— 不需要網路、雲端額度、或本地模型服務。
+pytest tests/ -q
+#   乾淨機器：642 passed / 8 skipped / 0 failed，19 秒
+#   有 work/ 快取：649 passed / 1 failed（那條紅燈是刻意的，見上）
+
+# 需要外部資源的那一層（下載 + 本地 ollama）。手動跑。
+pytest -m live -q
+```
+
+需要真實影片的測試在沒有 `work/` 時**會 skip 而不是假通過**。
+
+---
+
+## 架構
+
+```
+S0  取得      yt-dlp：影片 + metadata + 人工字幕（若有）
+S1a 逐字稿    人工字幕優先，否則 faster-whisper
+S1b 候選幀    ffmpeg 抽幀 → 靜止區段偵測
+S1c 去重      感知雜湊分群
+S3  對齊      逐字稿 ↔ 投影片時間軸
+────────────── 以上是 v1 的交付範圍 ──────────────
+S4a 投影片理解  VLM 判斷「這張是不是投影片」
+S4  聯合理解    逐段產生結構化 block
+S5  全片統整
+S6  渲染        chunks.jsonl（供向量庫匯入）
+```
+
+**v0.5 起主幹改為逐字稿**，投影片降為輔助。
+
+模型全部走本地（ollama）。雲端路徑（Gemini）的程式碼保留在
+`stages/providers.py` 但**不啟用**——理由與代價見
+[`docs/FROZEN.md`](docs/FROZEN.md)。
+
+---
 
 ## 文件
 
-- [`SDD.md`](SDD.md) — 規格。唯一權威。
-- [`docs/decisions.md`](docs/decisions.md) — 實作時才能決定、且有實測依據的
-  選擇（D1–D13，每則都附實測數據）
-- [`docs/known-risks.md`](docs/known-risks.md) — 未驗證的假設與何時能驗證
-  （R1–R8，含已解除的）
+| 檔案 | 內容 |
+|---|---|
+| [`docs/v1-scope.md`](docs/v1-scope.md) | **v1 交付什麼、怎麼驗收、什麼推到 v2。第一件要讀的** |
+| [`SDD.md`](SDD.md) | 主規格。**§5 驗證排在 §6 實作之前，這是刻意的** |
+| [`docs/FROZEN.md`](docs/FROZEN.md) | **刻意不做的東西** + 恢復觸發條件 |
+| [`docs/decisions.md`](docs/decisions.md) | D1–D36，含已作廢的 |
+| [`docs/known-risks.md`](docs/known-risks.md) | R1–R39 |
+| [`docs/research/`](docs/research/) | 前人工作勘查（帶引用）|
+| [`docs/worklog/`](docs/worklog/) | 每日工作日誌 |
+| [`experiments/r*/REPORT.md`](experiments/) | 每個實驗的量測結果，**含失敗的** |
+| [`CLAUDE.md`](CLAUDE.md) | 給 AI agent 的專案指引 |
 
-## 給後續實作者（含 AI coding agent）的提醒
+---
 
-SDD §5.5 有一份**禁止捷徑清單**。最容易被無意違反的是：
+## 下一步（v2）
 
-- 不得為了讓測試通過而調低 §5.2 的門檻。門檻在
-  `src/weft/validation/thresholds.py` 的 `ACCEPTANCE_THRESHOLDS`。
-- 不得縮小測試集或移除對抗樣本（A1–A7 為必選）。
-- 不得把 §5.3 的 assert 改成 warning 或 log。
-- e2e 測試不得用 mock 取代真實模型呼叫。
+v1 的產出是**給 v2 重做用的原料**。v2 的方向已經定了：
 
-其中 7 條已由 `tests/test_unit_conventions.py` 自動檢查。
-**若你認為某項規定阻礙進度，正確做法是停下來提出討論，而不是繞過。**
+1. 建**領域詞表**（不是完整語料庫——實測顯示錯誤幾乎全是專有名詞
+   被聽成音近的非術語：`ControlRaw` ← Control Law、`卡住的關係` ← 卡氏座標系）
+2. 用它**在解碼時**修逐字稿（contextual biasing），不是解碼後
+3. 才做成 RAG 或訓練資料
+
+**要防的陷阱**：不能用同一個先驗庫既修又驗——那就回到「拿測驗的結果
+當它自己的先驗」。要一開始就切出 held-out。細節見
+[`docs/v1-scope.md`](docs/v1-scope.md) §5.1。
+
+---
+
+## 版權
+
+素材是他人著作。版控裡**不含任何影片、逐字稿或音訊**——
+黃金集只版控標註檔（標籤 + 公開的影片標題與 URL）。
+`work/` 與 `out/` 都在 `.gitignore` 裡。
+
+---
+
+## English
+
+**weft** turns Chinese-language YouTube lecture playlists into a traceable
+transcript archive — 31 videos, 428k characters, 1,459 topical segments,
+every segment linked back to a timestamp.
+
+It does **not** improve speech recognition: 27 of 31 transcripts are
+unmodified Whisper output. What it adds over `yt-dlp | whisper` is manual-caption
+preference, topic segmentation validated against a "no cuts at all" baseline,
+a resumable stage machine with idempotency keys, and batch reporting that has
+been verified to report failure correctly (not just success).
+
+Its most transferable output is probably the **negative results** recorded in
+`docs/known-risks.md` — measured findings about local-LLM run-to-run variance
+(CV 0.34), the session-scoped nature of greedy decoding, why boundary F1 is
+structurally insensitive to over-segmentation, and why source-faithfulness
+checks penalise a model for correcting an ASR error.
+
+Docs are in Chinese.
