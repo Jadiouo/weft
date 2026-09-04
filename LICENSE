@@ -1,0 +1,39 @@
+MIT License
+
+Copyright (c) 2026 Jadiouo
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+NOTE ON SOURCE MATERIAL / 素材版權說明
+
+This licence covers the source code and documentation in this repository only.
+
+It does NOT cover the video material the pipeline processes. Those videos are
+the copyrighted work of their respective creators. This repository contains no
+videos, no audio, and no full transcripts — `work/` and `out/` are gitignored.
+The golden-set files under `tests/golden/` contain only human-made labels plus
+the public title and URL of each video. Short phrases quoted in `docs/` are
+there to document specific ASR errors.
+
+本授權僅涵蓋本倉庫的程式碼與文件，**不涵蓋管線處理的影片素材**——
+那些是各自著作權人的作品。本倉庫不含任何影片、音訊或完整逐字稿；
+`work/` 與 `out/` 都在 `.gitignore` 裡。`tests/golden/` 只有人工標註
+與公開的影片標題、URL。`docs/` 裡的短句引用是為了記錄具體的 ASR 錯誤。
