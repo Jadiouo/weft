@@ -41,6 +41,39 @@ def _present(cfg) -> list[str]:
     return [v for v in _manifest() if (Path(cfg.work_dir) / v / "05_transcript.json").exists()]
 
 
+def _guard(cfg) -> list[str]:
+    """skip 的條件是 **`work/` 這個目錄不存在**，不是「一支都沒有」。
+
+    **2026-09-04 這個區別救不了一次事故，就是因為它原本沒有分開。**
+    使用者本來要清 `02_frames`（36 GB 的可拋衍生物），實際上把
+    31 個工作目錄整個丟進垃圾桶——**v1 的交付物本身**。而測試跑起來是
+    `642 passed / 8 skipped / 0 failed`，**全綠**。
+
+    原因是三條測試的第一行都寫「一支都不在場就 skip」。於是：
+
+    | `work/` 裡有幾支 | 原行為 |
+    |---|---|
+    | 1 支 | **紅**（缺 30 支）|
+    | **0 支** | **skip** ← 整批消失反而最安靜 |
+
+    這不是「不假通過」，這是**把最嚴重的狀態做成最安靜的**。
+    「這台機器從來沒有檔案庫」與「檔案庫消失了」必須長得不一樣，
+    而 `work/` 這個目錄在不在剛好分得開：測試本身不會建它（驗過）。
+    """
+    work = Path(cfg.work_dir)
+    if not work.is_dir():
+        pytest.skip(f"`{work}` 不存在——這台機器沒有檔案庫（乾淨 clone）")
+    present = _present(cfg)
+    if not present:
+        pytest.fail(
+            f"`{work}` 存在，但 31 支**一支都不在**。\n"
+            "這不是「乾淨機器」——乾淨機器連 `work/` 都沒有。\n"
+            "**這是檔案庫消失了。** 先看垃圾桶（`~/.local/share/Trash/files/`），"
+            "31 個目錄若還在就用 `gio trash --restore \"trash:///<video_id>\"` 還原。"
+        )
+    return present
+
+
 def test_v1_archive_integrity(cfg):
     """在場的每一支，逐字稿與分段的數字必須與基線一字不差。
 
@@ -48,9 +81,7 @@ def test_v1_archive_integrity(cfg):
     另一支多 200 字，加起來看不出來。
     """
     manifest = _manifest()
-    present = _present(cfg)
-    if not present:
-        pytest.skip("`work/` 沒有任何 manifest 裡的影片——這台機器沒有檔案庫")
+    present = _guard(cfg)
 
     drift = []
     for vid in present:
@@ -82,9 +113,7 @@ def test_v1_archive_prepare_stages_done(cfg):
     **只驗 S0–S3。** S4–S6 不在 v1 範圍內，而 9/1 的驗證腳本正是因為
     寫成「所有階段都要 done」，把兩支帶著 S5/S6 `pending` 的影片誤判成失敗。
     """
-    present = _present(cfg)
-    if not present:
-        pytest.skip("`work/` 沒有任何 manifest 裡的影片")
+    present = _guard(cfg)
 
     bad = []
     for vid in present:
@@ -107,9 +136,7 @@ def test_v1_archive_is_complete(cfg):
     這條問「是不是全都在」。只有前者的話，`work/` 被砍到剩三支也會全綠。
     """
     manifest = _manifest()
-    present = set(_present(cfg))
-    if not present:
-        pytest.skip("`work/` 沒有任何 manifest 裡的影片")
+    present = set(_guard(cfg))
 
     missing = sorted(set(manifest) - present)
     assert not missing, (
