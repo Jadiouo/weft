@@ -13,6 +13,18 @@
 **v0.5 起主幹改為逐字稿**（投影片降為輔助）。理由與前人工作見
 `docs/research/2026-08-08-prior-art-transcript-first.md`。
 
+### v1 已封版（2026-09-04）——動手前先讀 `docs/v1-scope.md`
+
+**v1 交付的是逐字稿檔案庫，不是知識庫**（D35）：31 支影片、428,725 字、
+1,459 段、每段可回溯到秒數。理由是它 31/31 完整、確定性，而且是
+**v2 要拿去重做的原料**；理解層（`chunks.jsonl`）只有 8/31、CV 0.34、
+v2 會整個重寫。
+
+所以下面兩件事**不是待辦**，是刻意留著的（見 `v1-scope.md` §4）：
+
+- 分類紅燈仍是紅的——它量投影片分類，而 v1 交付物不含投影片路線
+- `chunks.jsonl` 只有 8 支——它是「路走得通」的樣本，不追覆蓋率
+
 ---
 
 ## 環境
@@ -23,7 +35,7 @@
 ~/miniconda3/envs/pipe-gpu/bin/python     # GPU 工作
 
 # 測試。**預設就是離線的**——不需要網路、雲端額度、或本地模型服務。
-# 乾淨機器上實測 628 passed / 5 skipped / 0 failed，19 秒。
+# 乾淨機器上實測 642 passed / 8 skipped / 0 failed，19 秒。
 ~/miniconda3/envs/pipe-cpu/bin/python -m pytest tests/ -q
 
 # 需要外部資源的那一層（下載影片 + 本地 ollama）。**手動跑。**
@@ -60,7 +72,8 @@ tests/test_e2e_pipeline.py::test_slide_classification_on_real_videos
 
 回來時比對這四個數字：**一樣就是沒退步，變了才要查**。
 它需要 `work/` 下的快取產物；乾淨機器上這條會 skip，全套是
-**628 passed / 5 skipped / 0 failed**（有 `work/` 時 632 passed / 1 failed）。
+**642 passed / 8 skipped / 0 failed**（有 `work/` 時 649 passed / 1 failed）。
+（2026-09-04 實測。）
 
 ### 第二條要盯的：分段（2026-08-09 起）
 
@@ -144,8 +157,9 @@ STEM 那支目前仍未修好（票 16），見 known-risks R33。
 | 檔案 | 內容 |
 |---|---|
 | `SDD.md` | 主規格。**§5 驗證在 §6 實作之前，動手前必讀** |
+| **`docs/v1-scope.md`** | **v1 交付什麼、怎麼驗收、什麼推到 v2。封版後第一件要讀的** |
 | `docs/FROZEN.md` | **刻意不做的東西** + 恢復觸發條件。做決定前先看這裡 |
-| `docs/decisions.md` | D1–D31 決策記錄，含已作廢的 |
+| `docs/decisions.md` | D1–D36 決策記錄，含已作廢的 |
 | `docs/known-risks.md` | 已知風險，`DANGLING_THRESHOLDS` 的配套紀錄 |
 | `docs/research/` | 前人工作勘查（帶引用） |
 | `docs/proposals/` | 提案，含未採納的 |

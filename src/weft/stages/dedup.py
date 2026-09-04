@@ -175,7 +175,15 @@ def s1c_dedup(cfg, work, slides: list[Slide], candidates: CandidateSet) -> dict:
     # ---- 中位幀距離：只診斷不剔除（D26），供 S-1 的 profile 用 ----
     frame_paths = sorted(work.frames_dir.glob("*")) if work.frames_dir.exists() else []
     median = median_frame(frame_paths, cfg.s1b.downscale_short_side, p.median_stride)
-    if median is not None:
+    if median is None:
+        # **「沒算」要跟「算了是零」長得不一樣**（同 D34 的 `video_pass_rate=None`）。
+        # `02_frames` 是可從 `.mp4` 重生的衍生物，2026-09-04 為了省 36 GB 清掉了
+        # （D36）。清掉之後這個診斷就算不出來——原本它會靜靜地不寫任何欄位，
+        # 讀 `04_dedup.json` 的人分不出「沒有 frames」與「距離剛好沒被記錄」。
+        stats["studio_distance"] = (
+            "未計算：02_frames 不存在或為空。重跑 S1b（`--force-stage S1b`）可重建。"
+        )
+    else:
         distances = [studio_distance(paths[sid], median, cfg.s1b.downscale_short_side)
                      for sid in sids]
         stats["studio_distance_min"] = round(min(distances), 4)

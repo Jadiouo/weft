@@ -1,0 +1,284 @@
+{
+  "_note": "v1 逐字稿檔案庫的實測基線（2026-09-04）。改動任一數字代表檔案庫變了，必須有理由。",
+  "videos": {
+    "0PiruzqokJM": {
+      "chars": 18565,
+      "cues": 2250,
+      "episode_index": 7,
+      "segments": 58,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元三 Kinematics and Inverse Kinematics (2/4)"
+    },
+    "2FjApOVIbUs": {
+      "chars": 5108,
+      "cues": 588,
+      "episode_index": null,
+      "segments": 16,
+      "series_id": null,
+      "source": "manual_caption",
+      "title": "古典醫學之人體設計系列-14五臟設計 肝臟(一)"
+    },
+    "57UQ6BLW2EQ": {
+      "chars": 20413,
+      "cues": 2341,
+      "episode_index": 25,
+      "segments": 71,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元八 A Multi-Functional Virtual Manipulation System"
+    },
+    "5bC-ZC3plkI": {
+      "chars": 16774,
+      "cues": 1950,
+      "episode_index": 11,
+      "segments": 53,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元四 Differential Relationship (2/3)"
+    },
+    "7TS2NfQSv1s": {
+      "chars": 16313,
+      "cues": 2067,
+      "episode_index": 26,
+      "segments": 49,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元九 A Networked VR-Based Telerobotic System"
+    },
+    "7d4hnMYizhc": {
+      "chars": 16080,
+      "cues": 1646,
+      "episode_index": 15,
+      "segments": 49,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元五 Motion Planning (3/4)"
+    },
+    "C_CFyilE-ks": {
+      "chars": 3525,
+      "cues": 429,
+      "episode_index": null,
+      "segments": 21,
+      "series_id": null,
+      "source": "manual_caption",
+      "title": "古典醫學之人體設計系列-5經脈設計"
+    },
+    "HcrPapC8UR4": {
+      "chars": 10732,
+      "cues": 1087,
+      "episode_index": 21,
+      "segments": 31,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元七 Robot Control and Compliance (2/5)"
+    },
+    "HtsON5UdO-g": {
+      "chars": 11039,
+      "cues": 1120,
+      "episode_index": 16,
+      "segments": 34,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元五 Motion Planning (4/4)"
+    },
+    "PiwuKP-p_jU": {
+      "chars": 23331,
+      "cues": 2745,
+      "episode_index": 14,
+      "segments": 79,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元五 Motion Planning (2/4)"
+    },
+    "Q271JpK6P0U": {
+      "chars": 24436,
+      "cues": 2806,
+      "episode_index": 2,
+      "segments": 79,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元零 機器人時代的來臨"
+    },
+    "UiKi5-Arce4": {
+      "chars": 9986,
+      "cues": 1152,
+      "episode_index": 4,
+      "segments": 35,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元二 Spatial Representation and Transformation (1/2)"
+    },
+    "VjeSDdQiJ68": {
+      "chars": 9535,
+      "cues": 1160,
+      "episode_index": 13,
+      "segments": 34,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元五 Motion Planning (1/4)"
+    },
+    "_j4LFvWYFnc": {
+      "chars": 13242,
+      "cues": 1635,
+      "episode_index": 19,
+      "segments": 48,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元六 Dynamics (3/3)"
+    },
+    "asNDQ8AtKdg": {
+      "chars": 8376,
+      "cues": 995,
+      "episode_index": 9,
+      "segments": 33,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元三 Kinematics and Inverse Kinematics (4/4)"
+    },
+    "cC3Ev9dtWqg": {
+      "chars": 23624,
+      "cues": 2582,
+      "episode_index": 3,
+      "segments": 73,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元一 Introduction"
+    },
+    "cv8P4T5RMyk": {
+      "chars": 22933,
+      "cues": 1908,
+      "episode_index": 18,
+      "segments": 72,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元六 Dynamics (2/3)"
+    },
+    "cvb4Bl93lzQ": {
+      "chars": 4781,
+      "cues": 576,
+      "episode_index": null,
+      "segments": 28,
+      "series_id": null,
+      "source": "whisper",
+      "title": "对Crush上头，为什么心动总是伴随着痛苦？"
+    },
+    "cxrqHABhWOU": {
+      "chars": 2983,
+      "cues": 322,
+      "episode_index": null,
+      "segments": 10,
+      "series_id": null,
+      "source": "manual_caption",
+      "title": "古典醫學之人體設計系列-27胰腺"
+    },
+    "gAiz69eKxEs": {
+      "chars": 18960,
+      "cues": 2096,
+      "episode_index": 12,
+      "segments": 62,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元四 Differential Relationship (3/3)"
+    },
+    "jW0EArUPdnU": {
+      "chars": 17230,
+      "cues": 1869,
+      "episode_index": 22,
+      "segments": 62,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元七 Robot Control and Compliance (3/5)"
+    },
+    "jgVD7IPNTs8": {
+      "chars": 8998,
+      "cues": 1097,
+      "episode_index": 1,
+      "segments": 30,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "機器人學-課程介紹"
+    },
+    "rZyQBdO4jAI": {
+      "chars": 19651,
+      "cues": 1883,
+      "episode_index": 20,
+      "segments": 64,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元七 Robot Control and Compliance (1/5)"
+    },
+    "s9JyTWKSozI": {
+      "chars": 5929,
+      "cues": 686,
+      "episode_index": 10,
+      "segments": 20,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元四 Differential Relationship (1/3)"
+    },
+    "u1lU2bFjUq0": {
+      "chars": 13862,
+      "cues": 1626,
+      "episode_index": 17,
+      "segments": 49,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元六 Dynamics (1/3)"
+    },
+    "vYAPaEJLdyY": {
+      "chars": 14973,
+      "cues": 1805,
+      "episode_index": 8,
+      "segments": 52,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元三 Kinematics and Inverse Kinematics (3/4)"
+    },
+    "wcDDcoHGjlE": {
+      "chars": 20806,
+      "cues": 2156,
+      "episode_index": 23,
+      "segments": 66,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元七 Robot Control and Compliance (4/5)"
+    },
+    "xBfyWwYylSA": {
+      "chars": 11021,
+      "cues": 1423,
+      "episode_index": 5,
+      "segments": 38,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元二 Spatial Representation and Transformation (2/2)"
+    },
+    "yhzeNQnFfGw": {
+      "chars": 11262,
+      "cues": 1375,
+      "episode_index": 24,
+      "segments": 40,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元七 Robot Control and Compliance (5/5)"
+    },
+    "zIglvjoU9vo": {
+      "chars": 8081,
+      "cues": 925,
+      "episode_index": null,
+      "segments": 49,
+      "series_id": null,
+      "source": "manual_caption",
+      "title": "古典醫學之人體設計系列-1生命之初 胎體成長（一）"
+    },
+    "zKxkbFxXkQ0": {
+      "chars": 16176,
+      "cues": 2093,
+      "episode_index": 6,
+      "segments": 54,
+      "series_id": "PLj6E8qlqmkFvo_OT6iWHks5wZNsMoSboK",
+      "source": "whisper",
+      "title": "單元三 Kinematics and Inverse Kinematics (1/4)"
+    }
+  }
+}
